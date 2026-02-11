@@ -2,6 +2,7 @@ ARG ETCD_VERSION=3.6.6
 
 # ============================================================
 # Rust builder stage: Compile etcd-entrypoint binary (musl)
+# Build context must be repo root (.) to access workspace
 # ============================================================
 FROM rust:1.83-alpine AS rust-builder
 
@@ -9,12 +10,17 @@ RUN apk add --no-cache musl-dev
 
 WORKDIR /build
 
-# Copy Cargo files first for dependency caching
-COPY Cargo.toml Cargo.lock* ./
-COPY src ./src
+# Copy workspace root files for dependency resolution
+COPY Cargo.toml Cargo.lock ./
+
+# Copy common crate (shared dependency)
+COPY common ./common
+
+# Copy etcd crate
+COPY etcd ./etcd
 
 # Build statically linked release binary
-RUN cargo build --release
+RUN cargo build --release -p etcd-entrypoint
 
 # ============================================================
 # Final stage: etcd with Rust entrypoint

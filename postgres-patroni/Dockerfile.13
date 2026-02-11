@@ -17,12 +17,17 @@ FROM rust:1.83-bookworm AS rust-builder
 
 WORKDIR /build
 
-# Copy Cargo files first for dependency caching
-COPY Cargo.toml Cargo.lock* ./
-COPY src ./src
+# Copy workspace root files for dependency resolution
+COPY Cargo.toml Cargo.lock ./
+
+# Copy common crate (shared dependency)
+COPY common ./common
+
+# Copy postgres-patroni crate
+COPY postgres-patroni ./postgres-patroni
 
 # Build release binaries
-RUN cargo build --release
+RUN cargo build --release -p postgres-patroni
 
 # ============================================================
 # Base stage: Common to both slim and HA
