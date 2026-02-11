@@ -736,11 +736,13 @@ name = "postgres-patroni"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
  "common",
  "nix",
  "openssl",
  "reqwest",
  "serde",
+ "serde_json",
  "serde_yaml",
  "tokio",
  "tracing",

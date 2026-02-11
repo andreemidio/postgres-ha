@@ -25,10 +25,12 @@ path = "src/bin/on_role_change.rs"
 [dependencies]
 common = { path = "../common" }
 anyhow.workspace = true
+base64 = "0.22"
 nix.workspace = true
 openssl.workspace = true
 reqwest.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 serde_yaml.workspace = true
 tokio.workspace = true
 tracing.workspace = true
