@@ -78,8 +78,8 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     patroni[etcd]==${PATRONI_VERSION}
 
 # Create required directories
-RUN mkdir -p /home/postgres /var/run/postgresql \
-    && chown -R postgres:postgres /home/postgres /var/run/postgresql
+RUN mkdir -p /home/postgres /var/run/postgresql /etc/patroni \
+    && chown -R postgres:postgres /home/postgres /var/run/postgresql /etc/patroni
 
 # Copy SSL init script and Rust binaries
 COPY --chmod=755 postgres-patroni/init-ssl.sh /docker-entrypoint-initdb.d/init-ssl.sh
