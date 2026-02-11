@@ -369,33 +369,16 @@ pub async fn start_etcd(
         "Starting etcd"
     );
 
-    let mut cmd = Command::new("/usr/local/bin/etcd");
-    cmd.arg("--auto-compaction-retention=1")
+    let child = Command::new("/usr/local/bin/etcd")
+        .arg("--auto-compaction-retention=1")
         .arg("--max-learners=2")
         .env("ETCD_INITIAL_CLUSTER", initial_cluster)
         .env("ETCD_INITIAL_CLUSTER_STATE", initial_cluster_state)
         .stdin(Stdio::null())
         .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
-
-    // Explicitly pass through critical etcd environment variables
-    // These should be inherited by default, but being explicit ensures reliability
-    for var in &[
-        "ETCD_NAME",
-        "ETCD_DATA_DIR",
-        "ETCD_LISTEN_CLIENT_URLS",
-        "ETCD_LISTEN_PEER_URLS",
-        "ETCD_ADVERTISE_CLIENT_URLS",
-        "ETCD_INITIAL_ADVERTISE_PEER_URLS",
-        "ETCD_ENABLE_GRPC_GATEWAY",
-    ] {
-        if let Ok(value) = std::env::var(var) {
-            info!(%var, %value, "Passing through env var");
-            cmd.env(var, value);
-        }
-    }
-
-    let child = cmd.spawn().context("Failed to start etcd")?;
+        .stderr(Stdio::inherit())
+        .spawn()
+        .context("Failed to start etcd")?;
 
     Ok(child)
 }
