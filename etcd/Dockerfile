@@ -6,7 +6,7 @@ ARG ETCD_VERSION=3.6.6
 # ============================================================
 FROM rust:1.83-alpine AS rust-builder
 
-RUN apk add --no-cache musl-dev
+RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static
 
 WORKDIR /build
 
