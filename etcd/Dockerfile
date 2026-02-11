@@ -10,14 +10,12 @@ RUN apk add --no-cache musl-dev
 
 WORKDIR /build
 
-# Copy workspace root files for dependency resolution
+# Copy entire workspace (Cargo needs all members to load)
 COPY Cargo.toml Cargo.lock ./
-
-# Copy common crate (shared dependency)
 COPY common ./common
-
-# Copy etcd crate
 COPY etcd ./etcd
+COPY haproxy ./haproxy
+COPY postgres-patroni ./postgres-patroni
 
 # Build statically linked release binary
 RUN cargo build --release -p etcd-entrypoint

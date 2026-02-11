@@ -17,13 +17,11 @@ FROM rust:1.83-bookworm AS rust-builder
 
 WORKDIR /build
 
-# Copy workspace root files for dependency resolution
+# Copy entire workspace (Cargo needs all members to load)
 COPY Cargo.toml Cargo.lock ./
-
-# Copy common crate (shared dependency)
 COPY common ./common
-
-# Copy postgres-patroni crate
+COPY etcd ./etcd
+COPY haproxy ./haproxy
 COPY postgres-patroni ./postgres-patroni
 
 # Build release binaries
@@ -48,7 +46,7 @@ RUN echo "postgres ALL=(root) NOPASSWD: /usr/bin/mkdir, /bin/chown, /bin/chmod, 
 FROM base AS slim
 
 # Copy Rust binaries
-COPY --chmod=755 init-ssl.sh /docker-entrypoint-initdb.d/init-ssl.sh
+COPY --chmod=755 postgres-patroni/init-ssl.sh /docker-entrypoint-initdb.d/init-ssl.sh
 COPY --from=rust-builder --chmod=755 /build/target/release/postgres-wrapper /usr/local/bin/wrapper.sh
 
 EXPOSE 5432
@@ -84,7 +82,7 @@ RUN mkdir -p /home/postgres /var/run/postgresql \
     && chown -R postgres:postgres /home/postgres /var/run/postgresql
 
 # Copy SSL init script and Rust binaries
-COPY --chmod=755 init-ssl.sh /docker-entrypoint-initdb.d/init-ssl.sh
+COPY --chmod=755 postgres-patroni/init-ssl.sh /docker-entrypoint-initdb.d/init-ssl.sh
 COPY --from=rust-builder --chmod=755 /build/target/release/postgres-wrapper /usr/local/bin/postgres-wrapper
 COPY --from=rust-builder --chmod=755 /build/target/release/post-bootstrap /usr/local/bin/post-bootstrap
 COPY --from=rust-builder --chmod=755 /build/target/release/patroni-runner /usr/local/bin/patroni-runner
