@@ -73,7 +73,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./postgres-patroni
+          context: .
           file: ./postgres-patroni/Dockerfile.${{ matrix.postgres_major }}
           target: ha
           platforms: linux/amd64,linux/arm64
@@ -122,7 +122,8 @@ jobs:
       - name: Build and push etcd
         uses: docker/build-push-action@v5
         with:
-          context: ./etcd
+          context: .
+          file: ./etcd/Dockerfile
           build-args: ETCD_VERSION=${{ env.ETCD_VERSION }}
           platforms: linux/amd64,linux/arm64
           push: true
@@ -168,7 +169,8 @@ jobs:
       - name: Build and push haproxy
         uses: docker/build-push-action@v5
         with:
-          context: ./haproxy
+          context: .
+          file: ./haproxy/Dockerfile
           build-args: HAPROXY_VERSION=${{ env.HAPROXY_VERSION }}
           platforms: linux/amd64,linux/arm64
           push: true

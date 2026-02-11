@@ -2,6 +2,7 @@ ARG HAPROXY_VERSION=3.2
 
 # ============================================================
 # Rust builder stage: Compile haproxy-entrypoint binary
+# Build context must be repo root (.) to access workspace
 # ============================================================
 FROM rust:1.83-alpine AS rust-builder
 
@@ -9,12 +10,17 @@ RUN apk add --no-cache musl-dev
 
 WORKDIR /build
 
-# Copy Cargo files first for dependency caching
-COPY Cargo.toml Cargo.lock* ./
-COPY src ./src
+# Copy workspace root files for dependency resolution
+COPY Cargo.toml Cargo.lock ./
+
+# Copy common crate (shared dependency)
+COPY common ./common
+
+# Copy haproxy crate
+COPY haproxy ./haproxy
 
 # Build release binary (statically linked with musl)
-RUN cargo build --release
+RUN cargo build --release -p haproxy-entrypoint
 
 # ============================================================
 # Final stage: HAProxy with Rust entrypoint
