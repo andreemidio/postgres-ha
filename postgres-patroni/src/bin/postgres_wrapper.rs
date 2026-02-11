@@ -7,8 +7,8 @@
 use anyhow::{anyhow, Context, Result};
 use common::{init_logging, ConfigExt, RailwayEnv, Telemetry, TelemetryEvent};
 use postgres_patroni::{
-    cert_expires_within, is_patroni_enabled, is_valid_x509v3_cert, pgdata, ssl_dir, sudo_command,
-    EXPECTED_VOLUME_MOUNT_PATH,
+    cert_expires_within, ensure_pg_stat_statements, is_patroni_enabled, is_valid_x509v3_cert,
+    pgdata, ssl_dir, sudo_command, EXPECTED_VOLUME_MOUNT_PATH,
 };
 use std::env;
 use std::os::unix::process::CommandExt;
@@ -219,6 +219,11 @@ async fn main() -> Result<()> {
         if Path::new(&postgres_conf_file).exists() && !Path::new(&server_crt).exists() {
             info!("Database missing certificate, generating...");
             run_init_ssl().await?;
+        }
+
+        // Ensure pg_stat_statements is configured for existing databases
+        if let Err(e) = ensure_pg_stat_statements(&pgdata) {
+            warn!(error = %e, "Failed to configure pg_stat_statements");
         }
 
         env::remove_var("PGHOST");
