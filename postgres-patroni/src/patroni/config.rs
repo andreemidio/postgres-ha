@@ -32,6 +32,10 @@ pub struct Config {
     /// Must be >= startup_grace_period. Default: 300 seconds (5 minutes).
     pub max_startup_timeout: u64,
     pub adopt_existing_data: bool,
+    /// If true and node has no existing data, wait for cluster leader in etcd
+    /// before starting Patroni. Used during HA conversion to prevent replicas
+    /// from racing with the primary for leadership.
+    pub wait_for_leader: bool,
 }
 
 impl Config {
@@ -68,6 +72,7 @@ impl Config {
             startup_grace_period: u64::env_parse("PATRONI_STARTUP_GRACE_PERIOD", 60),
             max_startup_timeout: u64::env_parse("PATRONI_MAX_STARTUP_TIMEOUT", 300),
             adopt_existing_data: bool::env_parse("PATRONI_ADOPT_EXISTING_DATA", false),
+            wait_for_leader: bool::env_parse("PATRONI_WAIT_FOR_LEADER", false),
         })
     }
 }
