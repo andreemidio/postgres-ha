@@ -14,7 +14,7 @@ pub fn generate_patroni_config(config: &Config) -> String {
 name: {name}
 
 restapi:
-  listen: 0.0.0.0:8008
+  listen: ":::8008"
   connect_address: {connect_address}:8008
 
 etcd3:
