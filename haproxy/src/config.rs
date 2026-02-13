@@ -10,7 +10,10 @@ pub struct Config {
     pub timeout_connect: String,
     pub timeout_client: String,
     pub timeout_server: String,
+    pub timeout_check: String,
     pub check_interval: String,
+    pub check_fastinter: String,
+    pub check_downinter: String,
 }
 
 impl Config {
@@ -28,7 +31,10 @@ impl Config {
             timeout_connect: String::env_or("HAPROXY_TIMEOUT_CONNECT", "10s"),
             timeout_client: String::env_or("HAPROXY_TIMEOUT_CLIENT", "30m"),
             timeout_server: String::env_or("HAPROXY_TIMEOUT_SERVER", "30m"),
+            timeout_check: String::env_or("HAPROXY_TIMEOUT_CHECK", "3s"),
             check_interval: String::env_or("HAPROXY_CHECK_INTERVAL", "3s"),
+            check_fastinter: String::env_or("HAPROXY_CHECK_FASTINTER", "500ms"),
+            check_downinter: String::env_or("HAPROXY_CHECK_DOWNINTER", "500ms"),
         })
     }
 }
