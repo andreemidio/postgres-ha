@@ -10,12 +10,12 @@ fn generate_server_entries(nodes: &[PostgresNode], single_node_mode: bool) -> St
         .map(|node| {
             if single_node_mode {
                 format!(
-                    "    server {} {}:{} check resolvers railway resolve-prefer ipv4",
+                    "    server {} {}:{} check resolvers railway resolve-prefer ipv6",
                     node.name, node.host, node.pg_port
                 )
             } else {
                 format!(
-                    "    server {} {}:{} check port {} resolvers railway resolve-prefer ipv4",
+                    "    server {} {}:{} check port {} resolvers railway resolve-prefer ipv6",
                     node.name, node.host, node.pg_port, node.patroni_port
                 )
             }
@@ -33,19 +33,20 @@ fn generate_primary_backend(
     if single_node_mode {
         format!(
             r#"backend postgresql_primary_backend
-    default-server inter {} fall 3 rise 2 on-marked-down shutdown-sessions
+    default-server inter {} fall 2 rise 1 fastinter {} downinter {} on-marked-down shutdown-sessions
 {}"#,
-            config.check_interval, server_entries
+            config.check_interval, config.check_fastinter, config.check_downinter, server_entries
         )
     } else {
         format!(
             r#"backend postgresql_primary_backend
     option httpchk
-    http-check send meth GET uri /primary
+    http-check connect
+    http-check send meth GET uri /primary ver HTTP/1.1 hdr Host localhost hdr Connection close
     http-check expect status 200
-    default-server inter {} fall 3 rise 2 on-marked-down shutdown-sessions
+    default-server inter {} fall 2 rise 1 fastinter {} downinter {} on-marked-down shutdown-sessions
 {}"#,
-            config.check_interval, server_entries
+            config.check_interval, config.check_fastinter, config.check_downinter, server_entries
         )
     }
 }
@@ -59,21 +60,22 @@ fn generate_replica_backend(
     if single_node_mode {
         format!(
             r#"backend postgresql_replicas_backend
-    balance roundrobin
-    default-server inter {} fall 3 rise 2 on-marked-down shutdown-sessions
+    balance leastconn
+    default-server inter {} fall 2 rise 1 fastinter {} downinter {} on-marked-down shutdown-sessions
 {}"#,
-            config.check_interval, server_entries
+            config.check_interval, config.check_fastinter, config.check_downinter, server_entries
         )
     } else {
         format!(
             r#"backend postgresql_replicas_backend
-    balance roundrobin
+    balance leastconn
     option httpchk
-    http-check send meth GET uri /replica
+    http-check connect
+    http-check send meth GET uri /replica ver HTTP/1.1 hdr Host localhost hdr Connection close
     http-check expect status 200
-    default-server inter {} fall 3 rise 2 on-marked-down shutdown-sessions
+    default-server inter {} fall 2 rise 1 fastinter {} downinter {} on-marked-down shutdown-sessions
 {}"#,
-            config.check_interval, server_entries
+            config.check_interval, config.check_fastinter, config.check_downinter, server_entries
         )
     }
 }
@@ -93,11 +95,15 @@ pub fn generate_config(config: &Config, nodes: &[PostgresNode]) -> String {
 defaults
     log global
     mode tcp
-    retries 3
+    option tcpka
+    option clitcpka
+    option srvtcpka
+    option redispatch
+    retries 2
     timeout connect {}
     timeout client {}
     timeout server {}
-    timeout check 5s
+    timeout check {}
 
 resolvers railway
     parse-resolv-conf
@@ -113,7 +119,7 @@ resolvers railway
 
 # Stats page for monitoring
 listen stats
-    bind *:8404
+    bind :::8404 v4v6
     mode http
     stats enable
     stats uri /stats
@@ -121,14 +127,14 @@ listen stats
 
 # Primary PostgreSQL (read-write)
 frontend postgresql_primary
-    bind *:5432
+    bind :::5432 v4v6
     default_backend postgresql_primary_backend
 
 {}
 
 # Replica PostgreSQL (read-only)
 frontend postgresql_replicas
-    bind *:5433
+    bind :::5433 v4v6
     default_backend postgresql_replicas_backend
 
 {}
@@ -137,6 +143,7 @@ frontend postgresql_replicas
         config.timeout_connect,
         config.timeout_client,
         config.timeout_server,
+        config.timeout_check,
         primary_backend,
         replica_backend
     )
