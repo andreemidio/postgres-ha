@@ -10,12 +10,12 @@ fn generate_server_entries(nodes: &[PostgresNode], single_node_mode: bool) -> St
         .map(|node| {
             if single_node_mode {
                 format!(
-                    "    server {} {}:{} check resolvers railway resolve-prefer ipv6",
+                    "    server {} {}:{} check resolvers railway resolve-prefer ipv4",
                     node.name, node.host, node.pg_port
                 )
             } else {
                 format!(
-                    "    server {} {}:{} check port {} resolvers railway resolve-prefer ipv6",
+                    "    server {} {}:{} check port {} resolvers railway resolve-prefer ipv4",
                     node.name, node.host, node.pg_port, node.patroni_port
                 )
             }
@@ -33,7 +33,7 @@ fn generate_primary_backend(
     if single_node_mode {
         format!(
             r#"backend postgresql_primary_backend
-    default-server inter {} fall 2 rise 1 fastinter {} downinter {} on-marked-down shutdown-sessions
+    default-server inter {} fall 3 rise 2 fastinter {} downinter {} on-marked-down shutdown-sessions
 {}"#,
             config.check_interval, config.check_fastinter, config.check_downinter, server_entries
         )
@@ -44,7 +44,7 @@ fn generate_primary_backend(
     http-check connect
     http-check send meth GET uri /primary ver HTTP/1.1 hdr Host localhost hdr Connection close
     http-check expect status 200
-    default-server inter {} fall 2 rise 1 fastinter {} downinter {} on-marked-down shutdown-sessions
+    default-server inter {} fall 3 rise 2 fastinter {} downinter {} on-marked-down shutdown-sessions
 {}"#,
             config.check_interval, config.check_fastinter, config.check_downinter, server_entries
         )
@@ -61,7 +61,7 @@ fn generate_replica_backend(
         format!(
             r#"backend postgresql_replicas_backend
     balance leastconn
-    default-server inter {} fall 2 rise 1 fastinter {} downinter {} on-marked-down shutdown-sessions
+    default-server inter {} fall 3 rise 2 fastinter {} downinter {} on-marked-down shutdown-sessions
 {}"#,
             config.check_interval, config.check_fastinter, config.check_downinter, server_entries
         )
@@ -73,7 +73,7 @@ fn generate_replica_backend(
     http-check connect
     http-check send meth GET uri /replica ver HTTP/1.1 hdr Host localhost hdr Connection close
     http-check expect status 200
-    default-server inter {} fall 2 rise 1 fastinter {} downinter {} on-marked-down shutdown-sessions
+    default-server inter {} fall 3 rise 2 fastinter {} downinter {} on-marked-down shutdown-sessions
 {}"#,
             config.check_interval, config.check_fastinter, config.check_downinter, server_entries
         )
@@ -99,7 +99,7 @@ defaults
     option clitcpka
     option srvtcpka
     option redispatch
-    retries 2
+    retries 3
     timeout connect {}
     timeout client {}
     timeout server {}
