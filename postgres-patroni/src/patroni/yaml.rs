@@ -30,6 +30,8 @@ bootstrap:
     postgresql:
       use_pg_rewind: true
       use_slots: true
+      remove_data_directory_on_rewind_failure: true
+      remove_data_directory_on_diverged_timelines: true
       parameters:
         wal_level: replica
         hot_standby: "on"
@@ -64,8 +66,6 @@ postgresql:
   pgpass: /tmp/pgpass
   callbacks:
     on_role_change: /usr/local/bin/on-role-change
-  remove_data_directory_on_rewind_failure: true
-  remove_data_directory_on_diverged_timelines: true
   create_replica_methods:
     - basebackup
   basebackup:
