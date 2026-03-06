@@ -27,6 +27,7 @@ bootstrap:
     retry_timeout: {retry_timeout}
     maximum_lag_on_failover: 1048576
     failsafe_mode: true
+    synchronous_mode: {synchronous_mode}
     postgresql:
       use_pg_rewind: true
       use_slots: true
@@ -108,6 +109,7 @@ postgresql:
         app_db = config.app_db,
         data_dir = config.data_dir,
         certs_dir = config.certs_dir,
+        synchronous_mode = config.synchronous_mode,
     )
 }
 

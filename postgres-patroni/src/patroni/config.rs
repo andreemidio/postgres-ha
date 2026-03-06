@@ -36,6 +36,9 @@ pub struct Config {
     /// before starting Patroni. Used during HA conversion to prevent replicas
     /// from racing with the primary for leadership.
     pub wait_for_leader: bool,
+    /// If true, enable synchronous replication mode. Ensures at least one
+    /// replica has received the data before a write is acknowledged.
+    pub synchronous_mode: bool,
 }
 
 impl Config {
@@ -73,6 +76,7 @@ impl Config {
             max_startup_timeout: u64::env_parse("PATRONI_MAX_STARTUP_TIMEOUT", 300),
             adopt_existing_data: bool::env_parse("PATRONI_ADOPT_EXISTING_DATA", false),
             wait_for_leader: bool::env_parse("PATRONI_WAIT_FOR_LEADER", false),
+            synchronous_mode: bool::env_parse("PATRONI_SYNCHRONOUS_MODE", false),
         })
     }
 }
