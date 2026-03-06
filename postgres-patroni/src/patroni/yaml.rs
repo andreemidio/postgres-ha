@@ -26,7 +26,7 @@ bootstrap:
     loop_wait: {loop_wait}
     retry_timeout: {retry_timeout}
     maximum_lag_on_failover: 1048576
-    failsafe_mode: false
+    failsafe_mode: true
     postgresql:
       use_pg_rewind: true
       use_slots: true
@@ -76,6 +76,9 @@ postgresql:
       username: "{repl_user}"
       password: "{repl_pass}"
     superuser:
+      username: "{superuser}"
+      password: "{superuser_pass}"
+    rewind:
       username: "{superuser}"
       password: "{superuser_pass}"
   app_user:
