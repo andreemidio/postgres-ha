@@ -2,7 +2,7 @@
 //!
 //! Functions for managing cluster membership, starting etcd, and health checking.
 
-use crate::config::{get_my_peer_url, parse_initial_cluster, peer_to_client_url, Config};
+use crate::config::{parse_initial_cluster, peer_to_client_url, Config};
 use anyhow::{anyhow, Context, Result};
 use common::{etcdctl, etcdctl_probe, Telemetry, TelemetryEvent};
 use std::path::Path;
@@ -183,15 +183,16 @@ pub async fn add_self_to_cluster(
     leader_endpoint: &str,
     telemetry: &Telemetry,
 ) -> Result<String> {
-    let my_peer_url = get_my_peer_url(&config.initial_cluster, &config.etcd_name)?
-        .ok_or_else(|| anyhow!("Could not find my peer URL in ETCD_INITIAL_CLUSTER"))?;
+    // Use the node's own advertise URL directly instead of looking up in initial_cluster.
+    // This is necessary for learner bootstrap where ETCD_INITIAL_CLUSTER only contains the leader.
+    let my_peer_url = &config.initial_advertise_peer_urls;
 
     info!(node = %config.etcd_name, via = %leader_endpoint, "Adding self as learner");
 
     // Check if already a member
     let members = get_member_list(leader_endpoint).await?;
     for member in &members {
-        if member.name == config.etcd_name || member.peer_url == my_peer_url {
+        if member.name == config.etcd_name || member.peer_url == *my_peer_url {
             let has_data = has_local_data(&config.data_dir).await?;
 
             if !has_data {

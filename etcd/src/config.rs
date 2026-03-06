@@ -16,6 +16,7 @@ pub struct Config {
     pub peer_check_interval: Duration,
     pub etcd_name: String,
     pub initial_cluster: String,
+    pub initial_advertise_peer_urls: String,
 }
 
 impl Config {
@@ -29,6 +30,7 @@ impl Config {
             peer_check_interval: Duration::from_secs(u64::env_parse("ETCD_PEER_CHECK_INTERVAL", 5)),
             etcd_name: String::env_required("ETCD_NAME")?,
             initial_cluster: String::env_required("ETCD_INITIAL_CLUSTER")?,
+            initial_advertise_peer_urls: String::env_required("ETCD_INITIAL_ADVERTISE_PEER_URLS")?,
         })
     }
 
@@ -79,10 +81,4 @@ pub(crate) fn get_bootstrap_leader(initial_cluster: &str) -> Result<String> {
 pub(crate) fn get_leader_endpoint(initial_cluster: &str, leader: &str) -> Result<Option<String>> {
     let cluster = parse_initial_cluster(initial_cluster)?;
     Ok(cluster.get(leader).map(|url| peer_to_client_url(url)))
-}
-
-/// Get my peer URL from ETCD_INITIAL_CLUSTER
-pub(crate) fn get_my_peer_url(initial_cluster: &str, etcd_name: &str) -> Result<Option<String>> {
-    let cluster = parse_initial_cluster(initial_cluster)?;
-    Ok(cluster.get(etcd_name).cloned())
 }

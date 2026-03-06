@@ -6,7 +6,7 @@ use crate::cluster::{
     add_self_to_cluster, check_cluster_health, clear_directory, get_current_cluster,
     has_local_data, promote_self, remove_stale_self,
 };
-use crate::config::{get_leader_endpoint, get_my_peer_url, parse_initial_cluster, peer_to_client_url, Config};
+use crate::config::{get_leader_endpoint, parse_initial_cluster, peer_to_client_url, Config};
 use anyhow::{anyhow, Result};
 use common::{etcdctl, etcdctl_probe, Telemetry, TelemetryEvent};
 use std::path::Path;
@@ -242,10 +242,10 @@ pub async fn bootstrap_as_leader(
             reason: "Leader volume lost, cluster exists".to_string(),
         });
 
-        let my_peer_url = get_my_peer_url(&config.initial_cluster, &config.etcd_name)?
-            .ok_or_else(|| anyhow!("Could not find my peer URL in ETCD_INITIAL_CLUSTER"))?;
+        // Use the node's own advertise URL directly instead of looking up in initial_cluster
+        let my_peer_url = &config.initial_advertise_peer_urls;
 
-        if let Err(e) = remove_stale_self(&existing_endpoint, &config.etcd_name, &my_peer_url, telemetry).await {
+        if let Err(e) = remove_stale_self(&existing_endpoint, &config.etcd_name, my_peer_url, telemetry).await {
             warn!(error = %e, "Failed to remove stale self, continuing anyway");
         }
 
@@ -282,7 +282,7 @@ pub async fn bootstrap_as_leader(
 
                 if cluster_str.is_empty() {
                     cluster_str =
-                        get_current_cluster(&existing_endpoint, &config.etcd_name, &my_peer_url)
+                        get_current_cluster(&existing_endpoint, &config.etcd_name, my_peer_url)
                             .await?;
                 }
 
@@ -301,8 +301,8 @@ pub async fn bootstrap_as_leader(
     }
 
     // Fresh bootstrap - single node cluster
-    let my_peer_url = get_my_peer_url(&config.initial_cluster, &config.etcd_name)?
-        .ok_or_else(|| anyhow!("Could not find my peer URL in ETCD_INITIAL_CLUSTER"))?;
+    // Use the node's own advertise URL directly instead of looking up in initial_cluster
+    let my_peer_url = &config.initial_advertise_peer_urls;
 
     let single_node_cluster = format!("{}={}", config.etcd_name, my_peer_url);
     info!(cluster = %single_node_cluster, "Bootstrapping single-node cluster");
