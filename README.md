@@ -81,7 +81,7 @@ HAProxy automatically routes connections:
 | `PATRONI_SCOPE` | `pg-ha-cluster` | Cluster identifier |
 | `PATRONI_TTL` | `30` | Leader lease TTL (seconds) |
 | `PATRONI_LOOP_WAIT` | `10` | Health check interval |
-| `POSTGRES_NODES` | (required for HAProxy) | Node list in format `host:pgport:healthport,...` |
+| `POSTGRES_NODES` | (required for HAProxy) | Node list in format `host:pgport:patroniport,...` |
 | `HAPROXY_HEALTH_CHECK_PORT` | (optional) | Override health check port for all nodes. Set to `8009` to use direct PostgreSQL health server instead of Patroni API (`8008`) |
 | `HAPROXY_MAX_CONN` | `1000` | Maximum concurrent connections |
 | `HAPROXY_CHECK_INTERVAL` | `3s` | Backend health check interval |

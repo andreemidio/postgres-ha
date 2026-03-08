@@ -40,8 +40,8 @@ fn main() -> Result<()> {
         info!("Single node mode: routing directly without Patroni health checks");
     } else if let Some(ref port) = config.health_check_port_override {
         info!(port = %port, "Using health check port override");
-    } else {
-        info!("Using health check ports from POSTGRES_NODES");
+    } else if let Some(first_node) = nodes.first() {
+        info!(port = %first_node.health_port, "Using health check port from POSTGRES_NODES");
     }
 
     telemetry.send(TelemetryEvent::HaproxyConfigGenerating {
