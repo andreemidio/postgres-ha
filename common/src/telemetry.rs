@@ -277,6 +277,7 @@ pub struct Telemetry {
     endpoint: String,
     project_id: String,
     environment_id: String,
+    service_id: String,
     component: String,
 }
 
@@ -293,6 +294,7 @@ impl Telemetry {
             endpoint: RailwayEnv::graphql_endpoint(),
             project_id: RailwayEnv::project_id(),
             environment_id: RailwayEnv::environment_id(),
+            service_id: RailwayEnv::service_id(),
             component: component.to_string(),
         }
     }
@@ -306,6 +308,7 @@ impl Telemetry {
         let client = Arc::clone(&self.client);
         let project_id = self.project_id.clone();
         let environment_id = self.environment_id.clone();
+        let service_id = self.service_id.clone();
         let component = self.component.clone();
 
         let event_type = event.event_type();
@@ -328,6 +331,7 @@ impl Telemetry {
                         "stacktrace": metadata,
                         "projectId": project_id,
                         "environmentId": environment_id,
+                        "serviceId": service_id,
                         "version": component
                     }
                 }
@@ -371,6 +375,7 @@ impl Telemetry {
                     "stacktrace": metadata,
                     "projectId": self.project_id,
                     "environmentId": self.environment_id,
+                    "serviceId": self.service_id,
                     "version": self.component
                 }
             }
