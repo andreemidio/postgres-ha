@@ -33,7 +33,42 @@ env:
   BETA_SUFFIX: ''
 
 jobs:
+  # Detect which components changed to avoid unnecessary builds
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      postgres: ${{ steps.filter.outputs.postgres }}
+      etcd: ${{ steps.filter.outputs.etcd }}
+      haproxy: ${{ steps.filter.outputs.haproxy }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            postgres:
+              - 'postgres-patroni/**'
+              - 'common/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '.github/workflows/build-and-push.yml'
+            etcd:
+              - 'etcd/**'
+              - 'common/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '.github/workflows/build-and-push.yml'
+            haproxy:
+              - 'haproxy/**'
+              - 'common/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '.github/workflows/build-and-push.yml'
+
   build-postgres-patroni:
+    needs: changes
+    # Build if: postgres files changed, OR scheduled run, OR manual trigger
+    if: ${{ needs.changes.outputs.postgres == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -92,6 +127,8 @@ jobs:
 
   # Build other components (etcd, haproxy)
   build-etcd:
+    needs: changes
+    if: ${{ needs.changes.outputs.etcd == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -140,6 +177,8 @@ jobs:
           cache-to: type=gha,mode=max,scope=etcd
 
   build-haproxy:
+    needs: changes
+    if: ${{ needs.changes.outputs.haproxy == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
