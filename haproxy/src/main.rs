@@ -39,16 +39,9 @@ fn main() -> Result<()> {
     if single_node_mode {
         info!("Single node mode: routing directly without Patroni health checks");
     } else if let Some(ref port) = config.health_check_port_override {
-        if port == "8009" {
-            info!(
-                port = %port,
-                "Using direct PostgreSQL health server (bypasses Patroni REST API)"
-            );
-        } else {
-            info!(port = %port, "Using custom health check port override");
-        }
+        info!(port = %port, "Using health check port override");
     } else {
-        info!("Using health check ports from POSTGRES_NODES (Patroni REST API)");
+        info!("Using health check ports from POSTGRES_NODES");
     }
 
     telemetry.send(TelemetryEvent::HaproxyConfigGenerating {
