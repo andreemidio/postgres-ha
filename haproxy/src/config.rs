@@ -25,8 +25,8 @@ impl Config {
     pub fn from_env() -> Result<Self> {
         let postgres_nodes = String::env_required("POSTGRES_NODES").context(
             "POSTGRES_NODES is required.\n\
-             Format: hostname:pgport,hostname:pgport,...\n\
-             Example: postgres-1.railway.internal:5432,postgres-2.railway.internal:5432",
+             Format: hostname:pgport:patroniport,hostname:pgport:patroniport,...\n\
+             Example: postgres-1.railway.internal:5432:8008,postgres-2.railway.internal:5432:8008",
         )?;
 
         Ok(Self {
