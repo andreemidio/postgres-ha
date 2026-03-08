@@ -11,6 +11,7 @@ mod template;
 
 use anyhow::{Context, Result};
 use common::{init_logging, Telemetry, TelemetryEvent};
+use std::env;
 use std::fs;
 use std::process::Command;
 use tracing::info;
@@ -21,6 +22,7 @@ use nodes::parse_nodes;
 use template::generate_config;
 
 const CONFIG_FILE: &str = "/usr/local/etc/haproxy/haproxy.cfg";
+const PG_ENV_FILE: &str = "/tmp/pg_env.sh";
 
 fn main() -> Result<()> {
     let _guard = init_logging("haproxy");
@@ -56,6 +58,24 @@ fn main() -> Result<()> {
     // Log config for debugging
     for line in haproxy_config.lines() {
         info!("  {}", line);
+    }
+
+    // Write PostgreSQL credentials to a file for external-check scripts
+    // HAProxy external-check runs in a restricted environment without container env vars
+    if config.use_pgsql_check {
+        let pguser = env::var("PGUSER").unwrap_or_else(|_| "postgres".to_string());
+        let pgpassword = env::var("PGPASSWORD").unwrap_or_default();
+        let pgport = env::var("PGPORT").unwrap_or_else(|_| "5432".to_string());
+
+        let pg_env = format!(
+            "export PGUSER='{}'\nexport PGPASSWORD='{}'\nexport PGPORT='{}'\n",
+            pguser.replace('\'', "'\"'\"'"),
+            pgpassword.replace('\'', "'\"'\"'"),
+            pgport
+        );
+
+        fs::write(PG_ENV_FILE, &pg_env).context("Failed to write pg_env.sh")?;
+        info!(path = PG_ENV_FILE, "PostgreSQL credentials written for health checks");
     }
 
     telemetry.send(TelemetryEvent::HaproxyStarted {
