@@ -34,9 +34,9 @@ RUN apk add --no-cache postgresql-client bash
 # Copy Rust binary
 COPY --from=rust-builder --chmod=755 /build/target/release/haproxy-entrypoint /entrypoint
 
-# Copy health check scripts for external-check mode
-COPY --chmod=755 haproxy/scripts/check-primary.sh /usr/local/bin/check-primary.sh
-COPY --chmod=755 haproxy/scripts/check-replica.sh /usr/local/bin/check-replica.sh
+# Copy Lua health check script
+RUN mkdir -p /usr/local/share/haproxy
+COPY haproxy/lua/pgsql_check.lua /usr/local/share/haproxy/pgsql_check.lua
 
 RUN chown -R haproxy:haproxy /usr/local/etc/haproxy
 
