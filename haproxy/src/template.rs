@@ -4,7 +4,11 @@ use crate::config::Config;
 use crate::nodes::PostgresNode;
 
 /// Generate server entries for backend configuration
-fn generate_server_entries(nodes: &[PostgresNode], single_node_mode: bool) -> String {
+fn generate_server_entries(
+    nodes: &[PostgresNode],
+    single_node_mode: bool,
+    health_check_port_override: Option<&str>,
+) -> String {
     nodes
         .iter()
         .map(|node| {
@@ -14,9 +18,13 @@ fn generate_server_entries(nodes: &[PostgresNode], single_node_mode: bool) -> St
                     node.name, node.host, node.pg_port
                 )
             } else {
+                // Use override if set, otherwise use health_port from POSTGRES_NODES
+                // Setting HAPROXY_HEALTH_CHECK_PORT=8009 switches to the direct PostgreSQL
+                // health server, which bypasses Patroni's REST API that can block when etcd is slow
+                let health_port = health_check_port_override.unwrap_or(&node.health_port);
                 format!(
                     "    server {} {}:{} check port {} resolvers railway resolve-prefer ipv4",
-                    node.name, node.host, node.pg_port, node.patroni_port
+                    node.name, node.host, node.pg_port, health_port
                 )
             }
         })
@@ -83,7 +91,11 @@ fn generate_replica_backend(
 /// Generate complete HAProxy configuration
 pub fn generate_config(config: &Config, nodes: &[PostgresNode]) -> String {
     let single_node_mode = nodes.len() == 1;
-    let server_entries = generate_server_entries(nodes, single_node_mode);
+    let server_entries = generate_server_entries(
+        nodes,
+        single_node_mode,
+        config.health_check_port_override.as_deref(),
+    );
     let primary_backend = generate_primary_backend(config, &server_entries, single_node_mode);
     let replica_backend = generate_replica_backend(config, &server_entries, single_node_mode);
 

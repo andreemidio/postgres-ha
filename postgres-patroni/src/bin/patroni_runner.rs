@@ -8,7 +8,8 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use common::init_logging;
 use nix::sys::stat::{umask, Mode};
 use postgres_patroni::patroni::{
-    generate_patroni_config, run_monitoring_loop, update_pg_hba_for_replication, Config,
+    generate_patroni_config, run_health_server, run_monitoring_loop, update_pg_hba_for_replication,
+    Config, HEALTH_SERVER_PORT,
 };
 use postgres_patroni::{volume_root, Telemetry};
 use serde::{Deserialize, Serialize};
@@ -199,6 +200,17 @@ async fn main() -> Result<()> {
     // Set umask so pg_basebackup creates files with correct permissions (0600/0700)
     // Without this, container environments may create files too permissive for PostgreSQL
     umask(Mode::from_bits_truncate(0o077));
+
+    // Start direct health server on port 8009
+    // This bypasses Patroni's REST API which can become unresponsive when etcd is slow.
+    // HAProxy should check this port instead of Patroni's 8008.
+    let superuser = config.superuser.clone();
+    tokio::spawn(async move {
+        if let Err(e) = run_health_server(superuser).await {
+            tracing::error!(error = %e, "Health server failed");
+        }
+    });
+    info!(port = HEALTH_SERVER_PORT, "Direct PostgreSQL health server started");
 
     // Start Patroni and run monitoring loop
     let child = start_patroni().await?;

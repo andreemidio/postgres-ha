@@ -14,6 +14,10 @@ pub struct Config {
     pub check_interval: String,
     pub check_fastinter: String,
     pub check_downinter: String,
+    /// Optional override for health check port. If set, uses this instead of
+    /// the port specified in POSTGRES_NODES. Set to "8009" to use the direct
+    /// PostgreSQL health server instead of Patroni's REST API (8008).
+    pub health_check_port_override: Option<String>,
 }
 
 impl Config {
@@ -21,8 +25,8 @@ impl Config {
     pub fn from_env() -> Result<Self> {
         let postgres_nodes = String::env_required("POSTGRES_NODES").context(
             "POSTGRES_NODES is required.\n\
-             Format: hostname:pgport:patroniport,hostname:pgport:patroniport,...\n\
-             Example: postgres-1.railway.internal:5432:8008,postgres-2.railway.internal:5432:8008",
+             Format: hostname:pgport,hostname:pgport,...\n\
+             Example: postgres-1.railway.internal:5432,postgres-2.railway.internal:5432",
         )?;
 
         Ok(Self {
@@ -35,6 +39,10 @@ impl Config {
             check_interval: String::env_or("HAPROXY_CHECK_INTERVAL", "3s"),
             check_fastinter: String::env_or("HAPROXY_CHECK_FASTINTER", "500ms"),
             check_downinter: String::env_or("HAPROXY_CHECK_DOWNINTER", "500ms"),
+            // If set, overrides the health port from POSTGRES_NODES.
+            // Set to "8009" to use the direct PostgreSQL health server
+            // instead of Patroni's REST API (8008).
+            health_check_port_override: std::env::var("HAPROXY_HEALTH_CHECK_PORT").ok(),
         })
     }
 }
