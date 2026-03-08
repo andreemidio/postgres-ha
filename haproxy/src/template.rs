@@ -122,8 +122,9 @@ pub fn generate_config(config: &Config, nodes: &[PostgresNode]) -> String {
     let replica_backend = generate_replica_backend(config, &server_entries, single_node_mode);
 
     // Enable external-check in global section if using pgsql check
+    // insecure-fork-wanted is required for HAProxy 2.4+ to allow forking for external checks
     let external_check_global = if config.use_pgsql_check && !single_node_mode {
-        "\n    external-check"
+        "\n    external-check\n    insecure-fork-wanted"
     } else {
         ""
     };
