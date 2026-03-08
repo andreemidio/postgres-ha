@@ -7,7 +7,6 @@ use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
-use std::thread;
 use std::time::Duration;
 use tracing::{info, warn};
 
@@ -299,67 +298,10 @@ impl Telemetry {
         }
     }
 
-    /// Send a telemetry event (fire and forget, non-blocking).
+    /// Send a telemetry event synchronously.
     ///
-    /// This spawns a thread to send the event asynchronously.
-    /// Errors are logged but do not affect the caller.
+    /// Blocks until the event is sent. Errors are logged but do not affect the caller.
     pub fn send(&self, event: TelemetryEvent) {
-        let endpoint = self.endpoint.clone();
-        let client = Arc::clone(&self.client);
-        let project_id = self.project_id.clone();
-        let environment_id = self.environment_id.clone();
-        let service_id = self.service_id.clone();
-        let component = self.component.clone();
-
-        let event_type = event.event_type();
-        let message = event.message();
-
-        // Log locally first
-        info!(event = %event_type, "{}", message);
-
-        // Serialize event data as metadata
-        let metadata = serde_json::to_string(&event).unwrap_or_default();
-
-        // Send asynchronously
-        thread::spawn(move || {
-            let payload = json!({
-                "query": "mutation telemetrySend($input: TelemetrySendInput!) { telemetrySend(input: $input) }",
-                "variables": {
-                    "input": {
-                        "command": event_type,
-                        "error": message,
-                        "stacktrace": metadata,
-                        "projectId": project_id,
-                        "environmentId": environment_id,
-                        "serviceId": service_id,
-                        "version": component
-                    }
-                }
-            });
-
-            match client
-                .post(&endpoint)
-                .header("Content-Type", "application/json")
-                .json(&payload)
-                .send()
-            {
-                Ok(resp) if resp.status().is_success() => {
-                    // Success - no action needed
-                }
-                Ok(resp) => {
-                    warn!("Telemetry got status {}", resp.status());
-                }
-                Err(e) => {
-                    warn!("Telemetry send failed: {}", e);
-                }
-            }
-        });
-    }
-
-    /// Send a telemetry event synchronously (blocking).
-    ///
-    /// Use this when you need to ensure the event is sent before continuing.
-    pub fn send_sync(&self, event: TelemetryEvent) -> Result<(), reqwest::Error> {
         let event_type = event.event_type();
         let message = event.message();
         let metadata = serde_json::to_string(&event).unwrap_or_default();
@@ -381,12 +323,21 @@ impl Telemetry {
             }
         });
 
-        self.client
+        match self.client
             .post(&self.endpoint)
             .header("Content-Type", "application/json")
             .json(&payload)
-            .send()?;
-
-        Ok(())
+            .send()
+        {
+            Ok(resp) if resp.status().is_success() => {
+                // Success - no action needed
+            }
+            Ok(resp) => {
+                warn!("Telemetry got status {}", resp.status());
+            }
+            Err(e) => {
+                warn!("Telemetry send failed: {}", e);
+            }
+        }
     }
 }

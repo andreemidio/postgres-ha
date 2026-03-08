@@ -45,6 +45,7 @@ fn main() {
         },
     };
 
+    // Send telemetry before exiting
     telemetry.send(event);
 
     // Always exit 0 to not block Patroni
