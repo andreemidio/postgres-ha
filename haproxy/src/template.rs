@@ -27,7 +27,7 @@ fn generate_server_entries(
                 // HTTP check mode: check Patroni API port
                 format!(
                     "    server {} {}:{} check port {} resolvers railway resolve-prefer ipv4",
-                    node.name, node.host, node.pg_port, node.patroni_port
+                    node.name, node.host, node.pg_port, node.health_port
                 )
             }
         })
