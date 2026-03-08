@@ -37,7 +37,11 @@ fn main() -> Result<()> {
     );
 
     if single_node_mode {
-        info!("Single node mode: routing directly without Patroni health checks");
+        info!("Single node mode: routing directly without health checks");
+    } else if config.use_pgsql_check {
+        info!("Using direct PostgreSQL health checks (pg_is_in_recovery)");
+    } else {
+        info!("Using Patroni REST API health checks");
     }
 
     telemetry.send(TelemetryEvent::HaproxyConfigGenerating {

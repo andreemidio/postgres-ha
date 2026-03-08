@@ -8,12 +8,13 @@ pub struct PostgresNode {
     pub name: String,
     pub host: String,
     pub pg_port: String,
-    pub patroni_port: String,
+    pub health_port: String,
 }
 
 /// Parse nodes from the POSTGRES_NODES environment variable
 ///
-/// Format: "hostname:pgport:patroniport,hostname:pgport:patroniport,..."
+/// Format: "hostname:pgport:healthport,..."
+/// Example: "postgres-1.railway.internal:5432:8008,postgres-2.railway.internal:5432:8008"
 pub fn parse_nodes(postgres_nodes: &str) -> Result<Vec<PostgresNode>> {
     postgres_nodes
         .split(',')
@@ -21,7 +22,7 @@ pub fn parse_nodes(postgres_nodes: &str) -> Result<Vec<PostgresNode>> {
             let parts: Vec<&str> = node.split(':').collect();
             if parts.len() != 3 {
                 return Err(anyhow!(
-                    "Invalid node format: {}. Expected: hostname:pgport:patroniport",
+                    "Invalid node format: {}. Expected: hostname:pgport:healthport",
                     node
                 ));
             }
@@ -33,7 +34,7 @@ pub fn parse_nodes(postgres_nodes: &str) -> Result<Vec<PostgresNode>> {
                 name,
                 host,
                 pg_port: parts[1].to_string(),
-                patroni_port: parts[2].to_string(),
+                health_port: parts[2].to_string(),
             })
         })
         .collect()
