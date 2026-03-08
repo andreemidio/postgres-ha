@@ -7,7 +7,7 @@ use crate::nodes::PostgresNode;
 fn generate_server_entries(
     nodes: &[PostgresNode],
     single_node_mode: bool,
-    health_check_port_override: Option<&str>,
+    use_pgsql_check: bool,
 ) -> String {
     nodes
         .iter()
@@ -17,14 +17,17 @@ fn generate_server_entries(
                     "    server {} {}:{} check resolvers railway resolve-prefer ipv4",
                     node.name, node.host, node.pg_port
                 )
+            } else if use_pgsql_check {
+                // external-check mode: no check port needed, script connects directly
+                format!(
+                    "    server {} {}:{} check resolvers railway resolve-prefer ipv4",
+                    node.name, node.host, node.pg_port
+                )
             } else {
-                // Use override if set, otherwise use health_port from POSTGRES_NODES
-                // Setting HAPROXY_HEALTH_CHECK_PORT=8009 switches to the direct PostgreSQL
-                // health server, which bypasses Patroni's REST API that can block when etcd is slow
-                let health_port = health_check_port_override.unwrap_or(&node.health_port);
+                // HTTP check mode: check Patroni API port
                 format!(
                     "    server {} {}:{} check port {} resolvers railway resolve-prefer ipv4",
-                    node.name, node.host, node.pg_port, health_port
+                    node.name, node.host, node.pg_port, node.patroni_port
                 )
             }
         })
@@ -45,7 +48,18 @@ fn generate_primary_backend(
 {}"#,
             config.check_interval, config.check_fastinter, config.check_downinter, server_entries
         )
+    } else if config.use_pgsql_check {
+        // External check mode: use psql to query pg_is_in_recovery() directly
+        format!(
+            r#"backend postgresql_primary_backend
+    option external-check
+    external-check command /usr/local/bin/check-primary.sh
+    default-server inter {} fall 3 rise 2 fastinter {} downinter {} on-marked-down shutdown-sessions
+{}"#,
+            config.check_interval, config.check_fastinter, config.check_downinter, server_entries
+        )
     } else {
+        // HTTP check mode: use Patroni REST API
         format!(
             r#"backend postgresql_primary_backend
     option httpchk
@@ -73,7 +87,19 @@ fn generate_replica_backend(
 {}"#,
             config.check_interval, config.check_fastinter, config.check_downinter, server_entries
         )
+    } else if config.use_pgsql_check {
+        // External check mode: use psql to query pg_is_in_recovery() directly
+        format!(
+            r#"backend postgresql_replicas_backend
+    balance leastconn
+    option external-check
+    external-check command /usr/local/bin/check-replica.sh
+    default-server inter {} fall 3 rise 2 fastinter {} downinter {} on-marked-down shutdown-sessions
+{}"#,
+            config.check_interval, config.check_fastinter, config.check_downinter, server_entries
+        )
     } else {
+        // HTTP check mode: use Patroni REST API
         format!(
             r#"backend postgresql_replicas_backend
     balance leastconn
@@ -91,18 +117,21 @@ fn generate_replica_backend(
 /// Generate complete HAProxy configuration
 pub fn generate_config(config: &Config, nodes: &[PostgresNode]) -> String {
     let single_node_mode = nodes.len() == 1;
-    let server_entries = generate_server_entries(
-        nodes,
-        single_node_mode,
-        config.health_check_port_override.as_deref(),
-    );
+    let server_entries = generate_server_entries(nodes, single_node_mode, config.use_pgsql_check);
     let primary_backend = generate_primary_backend(config, &server_entries, single_node_mode);
     let replica_backend = generate_replica_backend(config, &server_entries, single_node_mode);
+
+    // Enable external-check in global section if using pgsql check
+    let external_check_global = if config.use_pgsql_check && !single_node_mode {
+        "\n    external-check"
+    } else {
+        ""
+    };
 
     format!(
         r#"global
     maxconn {}
-    log stdout format raw local0
+    log stdout format raw local0{}
 
 defaults
     log global
@@ -152,6 +181,7 @@ frontend postgresql_replicas
 {}
 "#,
         config.max_conn,
+        external_check_global,
         config.timeout_connect,
         config.timeout_client,
         config.timeout_server,

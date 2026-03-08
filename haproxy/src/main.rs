@@ -37,11 +37,11 @@ fn main() -> Result<()> {
     );
 
     if single_node_mode {
-        info!("Single node mode: routing directly without Patroni health checks");
-    } else if let Some(ref port) = config.health_check_port_override {
-        info!(port = %port, "Using health check port override");
-    } else if let Some(first_node) = nodes.first() {
-        info!(port = %first_node.health_port, "Using health check port from POSTGRES_NODES");
+        info!("Single node mode: routing directly without health checks");
+    } else if config.use_pgsql_check {
+        info!("Using direct PostgreSQL health checks (pg_is_in_recovery)");
+    } else {
+        info!("Using Patroni REST API health checks");
     }
 
     telemetry.send(TelemetryEvent::HaproxyConfigGenerating {
