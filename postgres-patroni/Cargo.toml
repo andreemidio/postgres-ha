@@ -34,3 +34,5 @@ serde_json.workspace = true
 serde_yaml.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+axum.workspace = true
+tokio-postgres.workspace = true

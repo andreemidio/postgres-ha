@@ -43,6 +43,12 @@ openssl = "0.10"
 # Utilities
 uuid = { version = "1.0", features = ["v4"] }
 
+# HTTP server (health checks)
+axum = "0.8"
+
+# PostgreSQL client
+tokio-postgres = "0.7"
+
 [profile.release]
 lto = true
 codegen-units = 1
