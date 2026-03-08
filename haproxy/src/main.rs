@@ -38,8 +38,10 @@ fn main() -> Result<()> {
 
     if single_node_mode {
         info!("Single node mode: routing directly without role checks");
+    } else if config.use_pgsql_check {
+        info!("Multi-node mode: using pg_is_in_recovery() health checks (bypasses Patroni API)");
     } else {
-        info!("Multi-node mode: using pg_is_in_recovery() health checks");
+        info!("Multi-node mode: using Patroni REST API health checks");
     }
 
     telemetry.send(TelemetryEvent::HaproxyConfigGenerating {
