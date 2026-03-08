@@ -14,9 +14,6 @@ pub struct Config {
     pub check_interval: String,
     pub check_fastinter: String,
     pub check_downinter: String,
-    /// If true, use external-check with psql to query pg_is_in_recovery() directly.
-    /// This bypasses Patroni's REST API which can block when etcd is slow.
-    pub use_pgsql_check: bool,
 }
 
 impl Config {
@@ -38,8 +35,6 @@ impl Config {
             check_interval: String::env_or("HAPROXY_CHECK_INTERVAL", "3s"),
             check_fastinter: String::env_or("HAPROXY_CHECK_FASTINTER", "500ms"),
             check_downinter: String::env_or("HAPROXY_CHECK_DOWNINTER", "500ms"),
-            // If true, use psql to check pg_is_in_recovery() directly instead of Patroni API
-            use_pgsql_check: bool::env_parse("HAPROXY_USE_PGSQL_CHECK", false),
         })
     }
 }

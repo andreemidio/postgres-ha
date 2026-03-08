@@ -1,8 +1,8 @@
 //! HAProxy configuration generator and launcher
 //!
 //! Generates HAProxy configuration dynamically from PostgreSQL node information
-//! in environment variables. Supports single-node and multi-node modes with
-//! TCP/HTTP health checks via Patroni.
+//! in environment variables. Uses direct PostgreSQL health checks via
+//! pg_is_in_recovery() to bypass Patroni REST API blocking issues.
 
 mod config;
 mod monitoring;
@@ -37,11 +37,9 @@ fn main() -> Result<()> {
     );
 
     if single_node_mode {
-        info!("Single node mode: routing directly without health checks");
-    } else if config.use_pgsql_check {
-        info!("Using direct PostgreSQL health checks (pg_is_in_recovery)");
+        info!("Single node mode: routing directly without role checks");
     } else {
-        info!("Using Patroni REST API health checks");
+        info!("Multi-node mode: using pg_is_in_recovery() health checks");
     }
 
     telemetry.send(TelemetryEvent::HaproxyConfigGenerating {

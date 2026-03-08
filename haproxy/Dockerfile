@@ -35,6 +35,7 @@ RUN apk add --no-cache postgresql-client bash
 COPY --from=rust-builder --chmod=755 /build/target/release/haproxy-entrypoint /entrypoint
 
 # Copy health check scripts for external-check mode
+# These query pg_is_in_recovery() directly, bypassing Patroni REST API
 COPY --chmod=755 haproxy/scripts/check-primary.sh /usr/local/bin/check-primary.sh
 COPY --chmod=755 haproxy/scripts/check-replica.sh /usr/local/bin/check-replica.sh
 
