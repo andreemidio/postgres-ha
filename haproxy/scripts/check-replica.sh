@@ -8,7 +8,7 @@
 HOST="$1"
 PGPORT="${PGPORT:-5432}"
 
-RESULT=$(PGCONNECT_TIMEOUT=2 psql -h "$HOST" -p "$PGPORT" -U "$PGUSER" -d postgres -tAc "SELECT pg_is_in_recovery()" 2>/dev/null)
+RESULT=$(PGCONNECT_TIMEOUT=5 psql -h "$HOST" -p "$PGPORT" -U "$PGUSER" -d postgres -tAc "SELECT pg_is_in_recovery()" 2>/dev/null)
 
 if [ "$RESULT" = "t" ]; then
     exit 0  # Replica
