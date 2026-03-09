@@ -86,13 +86,12 @@ pub fn cert_expires_within(cert_path: &str, seconds: u64) -> Result<bool> {
 
     let not_after = cert.not_after();
 
-    // openssl::asn1::Asn1TimeRef::diff returns the difference in days and seconds
+    // Asn1TimeRef::diff(other) computes: other - self
+    // We want: not_after - now = time remaining until expiry
     let now = openssl::asn1::Asn1Time::days_from_now(0).context("Failed to get current time")?;
+    let diff = now.diff(&not_after).context("Failed to compute time difference")?;
 
-    // Check if certificate expires within the threshold
-    let diff = not_after.diff(&now).context("Failed to compute time difference")?;
-
-    // Convert diff to total seconds (diff.days * 86400 + diff.secs)
+    // Convert diff to total seconds (time remaining until expiry)
     let total_seconds = (diff.days as i64 * 86400) + diff.secs as i64;
 
     // If total_seconds is negative, cert is already expired
@@ -103,6 +102,48 @@ pub fn cert_expires_within(cert_path: &str, seconds: u64) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use openssl::asn1::Asn1Time;
+    use openssl::bn::BigNum;
+    use openssl::hash::MessageDigest;
+    use openssl::pkey::PKey;
+    use openssl::rsa::Rsa;
+    use openssl::x509::{X509Builder, X509NameBuilder};
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    /// Create a self-signed certificate that expires in `days` days
+    fn create_test_cert(days: u32) -> NamedTempFile {
+        let rsa = Rsa::generate(2048).unwrap();
+        let pkey = PKey::from_rsa(rsa).unwrap();
+
+        let mut name_builder = X509NameBuilder::new().unwrap();
+        name_builder.append_entry_by_text("CN", "test").unwrap();
+        let name = name_builder.build();
+
+        let mut builder = X509Builder::new().unwrap();
+        builder.set_version(2).unwrap();
+        builder.set_subject_name(&name).unwrap();
+        builder.set_issuer_name(&name).unwrap();
+        builder.set_pubkey(&pkey).unwrap();
+
+        let serial = BigNum::from_u32(1).unwrap();
+        builder
+            .set_serial_number(&serial.to_asn1_integer().unwrap())
+            .unwrap();
+
+        let not_before = Asn1Time::days_from_now(0).unwrap();
+        let not_after = Asn1Time::days_from_now(days).unwrap();
+        builder.set_not_before(&not_before).unwrap();
+        builder.set_not_after(&not_after).unwrap();
+
+        builder.sign(&pkey, MessageDigest::sha256()).unwrap();
+        let cert = builder.build();
+
+        let mut file = NamedTempFile::new().unwrap();
+        file.write_all(&cert.to_pem().unwrap()).unwrap();
+        file.flush().unwrap();
+        file
+    }
 
     #[test]
     fn test_missing_cert_is_invalid() {
@@ -112,5 +153,57 @@ mod tests {
     #[test]
     fn test_missing_cert_expires_soon() {
         assert!(cert_expires_within("/nonexistent/cert.pem", 86400).unwrap());
+    }
+
+    #[test]
+    fn test_cert_expires_within_one_year_not_expiring_soon() {
+        // Cert valid for 365 days should NOT be flagged as expiring within 30 days
+        let cert_file = create_test_cert(365);
+        let thirty_days_secs = 30 * 24 * 60 * 60;
+
+        let result = cert_expires_within(cert_file.path().to_str().unwrap(), thirty_days_secs);
+        assert!(
+            !result.unwrap(),
+            "Cert valid for 365 days should NOT be expiring within 30 days"
+        );
+    }
+
+    #[test]
+    fn test_cert_expires_within_10_days_is_expiring_soon() {
+        // Cert valid for only 10 days SHOULD be flagged as expiring within 30 days
+        let cert_file = create_test_cert(10);
+        let thirty_days_secs = 30 * 24 * 60 * 60;
+
+        let result = cert_expires_within(cert_file.path().to_str().unwrap(), thirty_days_secs);
+        assert!(
+            result.unwrap(),
+            "Cert valid for 10 days SHOULD be expiring within 30 days"
+        );
+    }
+
+    #[test]
+    fn test_cert_expires_within_boundary() {
+        // Cert valid for exactly 31 days should NOT be flagged as expiring within 30 days
+        let cert_file = create_test_cert(31);
+        let thirty_days_secs = 30 * 24 * 60 * 60;
+
+        let result = cert_expires_within(cert_file.path().to_str().unwrap(), thirty_days_secs);
+        assert!(
+            !result.unwrap(),
+            "Cert valid for 31 days should NOT be expiring within 30 days"
+        );
+    }
+
+    #[test]
+    fn test_cert_expires_within_820_days_not_expiring() {
+        // Regression test: 820-day cert (our default) must NOT trigger expiry renewal
+        let cert_file = create_test_cert(820);
+        let thirty_days_secs = 30 * 24 * 60 * 60;
+
+        let result = cert_expires_within(cert_file.path().to_str().unwrap(), thirty_days_secs);
+        assert!(
+            !result.unwrap(),
+            "Cert valid for 820 days (default SSL_CERT_DAYS) should NOT be expiring within 30 days"
+        );
     }
 }

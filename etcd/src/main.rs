@@ -61,18 +61,21 @@ async fn main() -> Result<()> {
         let params = match bootstrap_result {
             Ok(Some(params)) => params,
             Ok(None) => {
-                // Retry needed
-                telemetry.send(TelemetryEvent::EtcdStartupFailed {
-                    node: config.etcd_name.clone(),
-                    attempt,
-                    max_attempts: config.max_retries,
-                    error: "Bootstrap params not ready".to_string(),
-                });
+                // Only send telemetry at milestones to reduce noise (60 retries → 4 events)
+                if attempt == 1 || attempt == 10 || attempt == 30 || attempt == config.max_retries {
+                    telemetry.send(TelemetryEvent::EtcdStartupFailed {
+                        node: config.etcd_name.clone(),
+                        attempt,
+                        max_attempts: config.max_retries,
+                        error: "Bootstrap params not ready".to_string(),
+                    });
+                }
                 attempt += 1;
                 sleep(config.retry_delay).await;
                 continue;
             }
             Err(e) => {
+                // Always send telemetry for actual errors (not just "not ready")
                 telemetry.send(TelemetryEvent::EtcdStartupFailed {
                     node: config.etcd_name.clone(),
                     attempt,

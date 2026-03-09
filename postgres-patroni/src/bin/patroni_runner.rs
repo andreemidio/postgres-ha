@@ -15,12 +15,14 @@ use postgres_patroni::{volume_root, Telemetry};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
+use std::net::ToSocketAddrs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
+use tokio::net::TcpStream;
 use tokio::process::Command;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 /// Request body for etcd v3 range API
 #[derive(Serialize)]
@@ -32,21 +34,87 @@ struct EtcdRangeRequest {
 #[derive(Deserialize)]
 struct EtcdRangeResponse {
     #[serde(default)]
-    kvs: Option<Vec<serde_json::Value>>,
+    kvs: Option<Vec<EtcdKeyValue>>,
+}
+
+/// Key-value pair from etcd
+#[derive(Deserialize)]
+struct EtcdKeyValue {
+    /// Base64 encoded key
+    #[allow(dead_code)]
+    key: String,
+    /// Base64 encoded value
+    value: String,
+}
+
+/// Member data stored in etcd by Patroni
+#[derive(Deserialize)]
+struct PatroniMemberData {
+    /// Connection URL for PostgreSQL
+    conn_url: Option<String>,
+}
+
+/// Fetch a key from etcd, trying each host until one succeeds.
+/// Returns the decoded value if found, None if not found.
+async fn fetch_etcd_key(
+    client: &reqwest::Client,
+    etcd_hosts: &[&str],
+    key: &str,
+) -> Option<String> {
+    let key_base64 = BASE64.encode(key.as_bytes());
+
+    for host in etcd_hosts {
+        let url = format!("http://{}/v3/kv/range", host.trim());
+        let request = EtcdRangeRequest {
+            key: key_base64.clone(),
+        };
+
+        match client.post(&url).json(&request).send().await {
+            Ok(response) if response.status().is_success() => {
+                if let Ok(range_response) = response.json::<EtcdRangeResponse>().await {
+                    if let Some(kvs) = range_response.kvs {
+                        if let Some(kv) = kvs.first() {
+                            // Decode the base64 value
+                            if let Ok(decoded) = BASE64.decode(&kv.value) {
+                                if let Ok(value) = String::from_utf8(decoded) {
+                                    return Some(value);
+                                }
+                            }
+                        }
+                    }
+                }
+                return None; // Key doesn't exist
+            }
+            Ok(response) => {
+                warn!(
+                    host = %host,
+                    status = %response.status(),
+                    "etcd returned non-success status"
+                );
+            }
+            Err(e) => {
+                warn!(host = %host, error = %e, "Failed to connect to etcd");
+            }
+        }
+    }
+    None
 }
 
 /// Wait for the Patroni cluster to exist in etcd before starting.
 /// This prevents replicas from racing with the primary during initial setup.
 /// Only the primary (with existing data) should be allowed to initialize the cluster.
+///
+/// We wait for TWO conditions:
+/// 1. The leader key exists (/service/{scope}/leader) - contains leader name
+/// 2. The leader's member key has valid conn_url (/service/{scope}/members/{leader})
+///
+/// This prevents a race condition where the replica starts before the leader
+/// has fully registered its connection info, causing pg_basebackup to fail.
 async fn wait_for_cluster_in_etcd(config: &Config) -> Result<()> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
         .build()
         .context("Failed to create HTTP client")?;
-
-    // The key Patroni uses for leader lock: /service/{scope}/leader
-    let leader_key = format!("/service/{}/leader", config.scope);
-    let key_base64 = BASE64.encode(leader_key.as_bytes());
 
     // Parse etcd hosts - format is "host1:port1,host2:port2,..."
     let etcd_hosts: Vec<&str> = config.etcd_hosts.split(',').collect();
@@ -69,50 +137,60 @@ async fn wait_for_cluster_in_etcd(config: &Config) -> Result<()> {
             );
         }
 
-        // Try each etcd host until one succeeds
-        for host in &etcd_hosts {
-            let url = format!("http://{}/v3/kv/range", host.trim());
-            let request = EtcdRangeRequest {
-                key: key_base64.clone(),
-            };
+        // Step 1: Check if leader key exists and get leader name
+        let leader_key = format!("/service/{}/leader", config.scope);
+        if let Some(leader_name) = fetch_etcd_key(&client, &etcd_hosts, &leader_key).await {
+            info!(leader = %leader_name, "Found leader in etcd");
 
-            match client.post(&url).json(&request).send().await {
-                Ok(response) if response.status().is_success() => {
-                    if let Ok(range_response) = response.json::<EtcdRangeResponse>().await {
-                        // Check if we got any keys back (cluster exists and has a leader)
-                        let has_leader = range_response
-                            .kvs
-                            .as_ref()
-                            .map(|kvs| !kvs.is_empty())
-                            .unwrap_or(false);
-
-                        if has_leader {
+            // Step 2: Check if leader's member data has conn_url
+            let member_key = format!("/service/{}/members/{}", config.scope, leader_name);
+            if let Some(member_data_json) = fetch_etcd_key(&client, &etcd_hosts, &member_key).await
+            {
+                // Parse member data to check for conn_url
+                if let Ok(member_data) =
+                    serde_json::from_str::<PatroniMemberData>(&member_data_json)
+                {
+                    if let Some(conn_url) = &member_data.conn_url {
+                        if !conn_url.is_empty() {
                             info!(
                                 scope = %config.scope,
+                                leader = %leader_name,
+                                conn_url = %conn_url,
                                 elapsed = ?start.elapsed(),
-                                "Cluster leader found, proceeding to start Patroni"
+                                "Leader has valid conn_url, proceeding to start Patroni"
                             );
                             return Ok(());
                         }
+                        info!(
+                            leader = %leader_name,
+                            "Leader member data exists but conn_url is empty, waiting..."
+                        );
+                    } else {
+                        info!(
+                            leader = %leader_name,
+                            "Leader member data exists but missing conn_url, waiting..."
+                        );
                     }
-                }
-                Ok(response) => {
+                } else {
                     warn!(
-                        host = %host,
-                        status = %response.status(),
-                        "etcd returned non-success status"
+                        leader = %leader_name,
+                        data = %member_data_json,
+                        "Failed to parse leader member data, waiting..."
                     );
                 }
-                Err(e) => {
-                    warn!(host = %host, error = %e, "Failed to connect to etcd");
-                }
+            } else {
+                info!(
+                    leader = %leader_name,
+                    "Leader exists but member data not yet available, waiting..."
+                );
             }
+        } else {
+            info!(
+                elapsed = ?start.elapsed(),
+                "Cluster not yet initialized (no leader), waiting..."
+            );
         }
 
-        info!(
-            elapsed = ?start.elapsed(),
-            "Cluster not yet initialized, waiting..."
-        );
         tokio::time::sleep(poll_interval).await;
     }
 }

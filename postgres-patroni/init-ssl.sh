@@ -26,7 +26,13 @@ sudo chown postgres:postgres "$SSL_DIR"
 # Generate self-signed 509v3 certificates
 # ref: https://www.postgresql.org/docs/16/ssl-tcp.html#SSL-CERTIFICATE-CREATION
 
-openssl req -new -x509 -days "${SSL_CERT_DAYS:-820}" -nodes -text -out "$SSL_ROOT_CRT" -keyout "$SSL_ROOT_KEY" -subj "/CN=root-ca"
+# SSL_CERT_DAYS must be > 30 (our renewal threshold), otherwise certs expire immediately
+# Default to 820 days if unset, empty, non-numeric, or too small
+if ! [[ "${SSL_CERT_DAYS:-}" =~ ^[0-9]+$ ]] || [ "${SSL_CERT_DAYS:-0}" -le 30 ]; then
+    SSL_CERT_DAYS=820
+fi
+
+openssl req -new -x509 -days "${SSL_CERT_DAYS}" -nodes -text -out "$SSL_ROOT_CRT" -keyout "$SSL_ROOT_KEY" -subj "/CN=root-ca"
 
 chmod og-rwx "$SSL_ROOT_KEY"
 
@@ -44,7 +50,7 @@ keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
 subjectAltName = DNS:localhost
 EOF
 
-openssl x509 -req -in "$SSL_SERVER_CSR" -extfile "$SSL_V3_EXT" -extensions v3_req -text -days "${SSL_CERT_DAYS:-820}" -CA "$SSL_ROOT_CRT" -CAkey "$SSL_ROOT_KEY" -CAcreateserial -out "$SSL_SERVER_CRT"
+openssl x509 -req -in "$SSL_SERVER_CSR" -extfile "$SSL_V3_EXT" -extensions v3_req -text -days "${SSL_CERT_DAYS}" -CA "$SSL_ROOT_CRT" -CAkey "$SSL_ROOT_KEY" -CAcreateserial -out "$SSL_SERVER_CRT"
 
 chown postgres:postgres "$SSL_SERVER_CRT"
 
