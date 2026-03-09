@@ -65,8 +65,8 @@ jobs:
               - 'Cargo.lock'
               - '.github/workflows/build-and-push.yml'
 
-  # Build and cache Rust binaries (separate jobs for amd64/arm64 to run in parallel)
-  build-rust-binaries:
+  # Build and cache Rust binaries for postgres-patroni (separate jobs for amd64/arm64 to run in parallel)
+  build-rust-binaries-postgres:
     needs: changes
     if: ${{ needs.changes.outputs.postgres == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     strategy:
@@ -111,8 +111,54 @@ jobs:
           cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-builder-cache:${{ matrix.platform.arch }}
           cache-to: type=inline
 
+  # Build and cache Rust binaries for etcd/haproxy (alpine-based, separate jobs for amd64/arm64)
+  build-rust-binaries-alpine:
+    needs: changes
+    if: ${{ needs.changes.outputs.etcd == 'true' || needs.changes.outputs.haproxy == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    strategy:
+      matrix:
+        platform:
+          - runner: ubuntu-latest
+            arch: amd64
+          - runner: ubuntu-latest  # ARM64 native runners require paid plan, use QEMU
+            arch: arm64
+    runs-on: ${{ matrix.platform.runner }}
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU (for ARM64 on AMD64 runners)
+        if: matrix.platform.arch == 'arm64'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push rust-alpine-builder cache for ${{ matrix.platform.arch }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./etcd/Dockerfile
+          target: rust-builder
+          platforms: linux/${{ matrix.platform.arch }}
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}/rust-alpine-cache:${{ matrix.platform.arch }}
+          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-alpine-cache:${{ matrix.platform.arch }}
+          cache-to: type=inline
+
   build-postgres-patroni:
-    needs: [changes, build-rust-binaries]
+    needs: [changes, build-rust-binaries-postgres]
     # Build if: postgres files changed, OR scheduled run, OR manual trigger
     if: ${{ needs.changes.outputs.postgres == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
@@ -122,6 +168,7 @@ jobs:
 
     strategy:
       matrix:
+        platform: [amd64, arm64]
         postgres_major: [13, 14, 15, 16, 17]
 
     steps:
@@ -135,9 +182,10 @@ jobs:
           chmod +x get-postgres-version.sh
           MINOR_VERSION=$(./get-postgres-version.sh ${{ matrix.postgres_major }})
           echo "minor_version=${MINOR_VERSION}" >> $GITHUB_OUTPUT
-          echo "Building PostgreSQL ${MINOR_VERSION}"
+          echo "Building PostgreSQL ${MINOR_VERSION} for ${{ matrix.platform }}"
 
-      - name: Set up QEMU
+      - name: Set up QEMU (for ARM64 on AMD64 runners)
+        if: matrix.platform == 'arm64'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
@@ -154,13 +202,13 @@ jobs:
         id: sha
         run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
-      - name: Build and push Docker image
+      - name: Build and push Docker image for ${{ matrix.platform }}
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./postgres-patroni/Dockerfile
           target: ha
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/${{ matrix.platform }}
           push: true
           build-args: |
             POSTGRES_VERSION=${{ matrix.postgres_major }}
@@ -170,27 +218,31 @@ jobs:
             ${{ env.IMAGE_PREFIX }}/postgres-patroni:${{ steps.pg_version.outputs.minor_version }}${{ env.BETA_SUFFIX }}
             ${{ env.IMAGE_PREFIX }}/postgres-patroni:${{ steps.pg_version.outputs.minor_version }}-${{ steps.sha.outputs.short }}${{ env.BETA_SUFFIX }}
             ${{ matrix.postgres_major == env.LATEST_POSTGRES_MAJOR && format('{0}/postgres-patroni:latest{1}', env.IMAGE_PREFIX, env.BETA_SUFFIX) || '' }}
-          # Use rust-builder from registry for reliable concurrent access
+          # Use rust-builder from registry for the matching platform
           cache-from: |
-            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-builder-cache:amd64
-            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-builder-cache:arm64
+            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-builder-cache:${{ matrix.platform }}
             type=registry,ref=${{ env.IMAGE_PREFIX }}/postgres-patroni:${{ matrix.postgres_major }}
           cache-to: type=inline
 
   # Build other components (etcd, haproxy)
   build-etcd:
-    needs: changes
+    needs: [changes, build-rust-binaries-alpine]
     if: ${{ needs.changes.outputs.etcd == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
 
+    strategy:
+      matrix:
+        platform: [amd64, arm64]
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
+      - name: Set up QEMU (for ARM64 on AMD64 runners)
+        if: matrix.platform == 'arm64'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
@@ -211,13 +263,13 @@ jobs:
           echo "major=$(echo ${{ env.ETCD_VERSION }} | cut -d. -f1)" >> $GITHUB_OUTPUT
           echo "minor=$(echo ${{ env.ETCD_VERSION }} | cut -d. -f1-2)" >> $GITHUB_OUTPUT
 
-      - name: Build and push etcd
+      - name: Build and push etcd for ${{ matrix.platform }}
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./etcd/Dockerfile
           build-args: ETCD_VERSION=${{ env.ETCD_VERSION }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/${{ matrix.platform }}
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/etcd:latest${{ env.BETA_SUFFIX }}
@@ -225,22 +277,30 @@ jobs:
             ${{ env.IMAGE_PREFIX }}/etcd:${{ steps.meta.outputs.minor }}${{ env.BETA_SUFFIX }}
             ${{ env.IMAGE_PREFIX }}/etcd:${{ steps.meta.outputs.major }}${{ env.BETA_SUFFIX }}
             ${{ env.IMAGE_PREFIX }}/etcd:${{ env.ETCD_VERSION }}-${{ steps.meta.outputs.sha }}${{ env.BETA_SUFFIX }}
-          cache-from: type=gha,scope=etcd
-          cache-to: type=gha,mode=max,scope=etcd
+          # Use rust-alpine-builder from registry for the matching platform
+          cache-from: |
+            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-alpine-cache:${{ matrix.platform }}
+            type=registry,ref=${{ env.IMAGE_PREFIX }}/etcd:latest
+          cache-to: type=inline
 
   build-haproxy:
-    needs: changes
+    needs: [changes, build-rust-binaries-alpine]
     if: ${{ needs.changes.outputs.haproxy == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
 
+    strategy:
+      matrix:
+        platform: [amd64, arm64]
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
+      - name: Set up QEMU (for ARM64 on AMD64 runners)
+        if: matrix.platform == 'arm64'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
@@ -260,18 +320,21 @@ jobs:
           # haproxy: 2.9 -> major=2
           echo "major=$(echo ${{ env.HAPROXY_VERSION }} | cut -d. -f1)" >> $GITHUB_OUTPUT
 
-      - name: Build and push haproxy
+      - name: Build and push haproxy for ${{ matrix.platform }}
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./haproxy/Dockerfile
           build-args: HAPROXY_VERSION=${{ env.HAPROXY_VERSION }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/${{ matrix.platform }}
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/haproxy:latest${{ env.BETA_SUFFIX }}
             ${{ env.IMAGE_PREFIX }}/haproxy:${{ env.HAPROXY_VERSION }}${{ env.BETA_SUFFIX }}
             ${{ env.IMAGE_PREFIX }}/haproxy:${{ steps.meta.outputs.major }}${{ env.BETA_SUFFIX }}
             ${{ env.IMAGE_PREFIX }}/haproxy:${{ env.HAPROXY_VERSION }}-${{ steps.meta.outputs.sha }}${{ env.BETA_SUFFIX }}
-          cache-from: type=gha,scope=haproxy
-          cache-to: type=gha,mode=max,scope=haproxy
+          # Use rust-alpine-builder from registry for the matching platform
+          cache-from: |
+            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-alpine-cache:${{ matrix.platform }}
+            type=registry,ref=${{ env.IMAGE_PREFIX }}/haproxy:latest
+          cache-to: type=inline
