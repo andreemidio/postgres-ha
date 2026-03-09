@@ -100,44 +100,6 @@ jobs:
           cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-builder-cache:amd64
           cache-to: type=inline
 
-  # Build Rust binaries for postgres-patroni (ARM64 - QEMU, slow ~40min)
-  build-rust-binaries-postgres-arm64:
-    needs: changes
-    if: ${{ needs.changes.outputs.postgres == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push rust-builder cache for arm64
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./postgres-patroni/Dockerfile
-          target: rust-builder
-          platforms: linux/arm64
-          push: true
-          tags: ${{ env.IMAGE_PREFIX }}/rust-builder-cache:arm64
-          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-builder-cache:arm64
-          cache-to: type=inline
-
   # Build Rust binaries for etcd (AMD64 - alpine, native, fast ~2-3min)
   build-rust-binaries-etcd-amd64:
     needs: changes
@@ -173,44 +135,6 @@ jobs:
           cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-etcd-cache:amd64
           cache-to: type=inline
 
-  # Build Rust binaries for etcd (ARM64 - alpine, QEMU, slow ~40min)
-  build-rust-binaries-etcd-arm64:
-    needs: changes
-    if: ${{ needs.changes.outputs.etcd == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push rust-builder cache for etcd arm64
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./etcd/Dockerfile
-          target: rust-builder
-          platforms: linux/arm64
-          push: true
-          tags: ${{ env.IMAGE_PREFIX }}/rust-etcd-cache:arm64
-          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-etcd-cache:arm64
-          cache-to: type=inline
-
   # Build Rust binaries for haproxy (AMD64 - alpine, native, fast ~2-3min)
   build-rust-binaries-haproxy-amd64:
     needs: changes
@@ -244,44 +168,6 @@ jobs:
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/rust-haproxy-cache:amd64
           cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-haproxy-cache:amd64
-          cache-to: type=inline
-
-  # Build Rust binaries for haproxy (ARM64 - alpine, QEMU, slow ~40min)
-  build-rust-binaries-haproxy-arm64:
-    needs: changes
-    if: ${{ needs.changes.outputs.haproxy == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push rust-builder cache for haproxy arm64
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./haproxy/Dockerfile
-          target: rust-builder
-          platforms: linux/arm64
-          push: true
-          tags: ${{ env.IMAGE_PREFIX }}/rust-haproxy-cache:arm64
-          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-haproxy-cache:arm64
           cache-to: type=inline
 
   # Build postgres-patroni for AMD64 (depends only on amd64 rust binaries)
@@ -345,70 +231,6 @@ jobs:
             type=registry,ref=${{ env.IMAGE_PREFIX }}/postgres-patroni:${{ matrix.postgres_major }}
           cache-to: type=inline
 
-  # Build postgres-patroni for ARM64 (depends only on arm64 rust binaries)
-  build-postgres-patroni-arm64:
-    needs: [changes, build-rust-binaries-postgres-arm64]
-    if: ${{ needs.changes.outputs.postgres == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    strategy:
-      matrix:
-        postgres_major: [13, 14, 15, 16, 17]
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Get PostgreSQL minor version
-        id: pg_version
-        run: |
-          cd postgres-patroni
-          chmod +x get-postgres-version.sh
-          MINOR_VERSION=$(./get-postgres-version.sh ${{ matrix.postgres_major }})
-          echo "minor_version=${MINOR_VERSION}" >> $GITHUB_OUTPUT
-          echo "Building PostgreSQL ${MINOR_VERSION} for arm64"
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Get short SHA
-        id: sha
-        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-
-      - name: Build and push Docker image for arm64
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./postgres-patroni/Dockerfile
-          target: ha
-          platforms: linux/arm64
-          push: true
-          build-args: |
-            POSTGRES_VERSION=${{ matrix.postgres_major }}
-          tags: |
-            ${{ env.IMAGE_PREFIX }}/postgres-patroni:${{ matrix.postgres_major }}${{ env.BETA_SUFFIX }}
-            ${{ env.IMAGE_PREFIX }}/postgres-patroni:${{ matrix.postgres_major }}-${{ steps.sha.outputs.short }}${{ env.BETA_SUFFIX }}
-            ${{ env.IMAGE_PREFIX }}/postgres-patroni:${{ steps.pg_version.outputs.minor_version }}${{ env.BETA_SUFFIX }}
-            ${{ env.IMAGE_PREFIX }}/postgres-patroni:${{ steps.pg_version.outputs.minor_version }}-${{ steps.sha.outputs.short }}${{ env.BETA_SUFFIX }}
-            ${{ matrix.postgres_major == env.LATEST_POSTGRES_MAJOR && format('{0}/postgres-patroni:latest{1}', env.IMAGE_PREFIX, env.BETA_SUFFIX) || '' }}
-          cache-from: |
-            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-builder-cache:arm64
-            type=registry,ref=${{ env.IMAGE_PREFIX }}/postgres-patroni:${{ matrix.postgres_major }}
-          cache-to: type=inline
-
   # Build etcd for AMD64 (depends only on amd64 etcd rust binaries)
   build-etcd-amd64:
     needs: [changes, build-rust-binaries-etcd-amd64]
@@ -458,58 +280,6 @@ jobs:
             type=registry,ref=${{ env.IMAGE_PREFIX }}/etcd:latest
           cache-to: type=inline
 
-  # Build etcd for ARM64 (depends only on arm64 etcd rust binaries)
-  build-etcd-arm64:
-    needs: [changes, build-rust-binaries-etcd-arm64]
-    if: ${{ needs.changes.outputs.etcd == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Get short SHA and version parts
-        id: meta
-        run: |
-          echo "sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-          echo "major=$(echo ${{ env.ETCD_VERSION }} | cut -d. -f1)" >> $GITHUB_OUTPUT
-          echo "minor=$(echo ${{ env.ETCD_VERSION }} | cut -d. -f1-2)" >> $GITHUB_OUTPUT
-
-      - name: Build and push etcd for arm64
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./etcd/Dockerfile
-          build-args: ETCD_VERSION=${{ env.ETCD_VERSION }}
-          platforms: linux/arm64
-          push: true
-          tags: |
-            ${{ env.IMAGE_PREFIX }}/etcd:latest${{ env.BETA_SUFFIX }}
-            ${{ env.IMAGE_PREFIX }}/etcd:${{ env.ETCD_VERSION }}${{ env.BETA_SUFFIX }}
-            ${{ env.IMAGE_PREFIX }}/etcd:${{ steps.meta.outputs.minor }}${{ env.BETA_SUFFIX }}
-            ${{ env.IMAGE_PREFIX }}/etcd:${{ steps.meta.outputs.major }}${{ env.BETA_SUFFIX }}
-            ${{ env.IMAGE_PREFIX }}/etcd:${{ env.ETCD_VERSION }}-${{ steps.meta.outputs.sha }}${{ env.BETA_SUFFIX }}
-          cache-from: |
-            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-etcd-cache:arm64
-            type=registry,ref=${{ env.IMAGE_PREFIX }}/etcd:latest
-          cache-to: type=inline
-
   # Build haproxy for AMD64 (depends only on amd64 haproxy rust binaries)
   build-haproxy-amd64:
     needs: [changes, build-rust-binaries-haproxy-amd64]
@@ -554,55 +324,5 @@ jobs:
             ${{ env.IMAGE_PREFIX }}/haproxy:${{ env.HAPROXY_VERSION }}-${{ steps.meta.outputs.sha }}${{ env.BETA_SUFFIX }}
           cache-from: |
             type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-haproxy-cache:amd64
-            type=registry,ref=${{ env.IMAGE_PREFIX }}/haproxy:latest
-          cache-to: type=inline
-
-  # Build haproxy for ARM64 (depends only on arm64 haproxy rust binaries)
-  build-haproxy-arm64:
-    needs: [changes, build-rust-binaries-haproxy-arm64]
-    if: ${{ needs.changes.outputs.haproxy == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Get short SHA and version parts
-        id: meta
-        run: |
-          echo "sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
-          echo "major=$(echo ${{ env.HAPROXY_VERSION }} | cut -d. -f1)" >> $GITHUB_OUTPUT
-
-      - name: Build and push haproxy for arm64
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./haproxy/Dockerfile
-          build-args: HAPROXY_VERSION=${{ env.HAPROXY_VERSION }}
-          platforms: linux/arm64
-          push: true
-          tags: |
-            ${{ env.IMAGE_PREFIX }}/haproxy:latest${{ env.BETA_SUFFIX }}
-            ${{ env.IMAGE_PREFIX }}/haproxy:${{ env.HAPROXY_VERSION }}${{ env.BETA_SUFFIX }}
-            ${{ env.IMAGE_PREFIX }}/haproxy:${{ steps.meta.outputs.major }}${{ env.BETA_SUFFIX }}
-            ${{ env.IMAGE_PREFIX }}/haproxy:${{ env.HAPROXY_VERSION }}-${{ steps.meta.outputs.sha }}${{ env.BETA_SUFFIX }}
-          cache-from: |
-            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-haproxy-cache:arm64
             type=registry,ref=${{ env.IMAGE_PREFIX }}/haproxy:latest
           cache-to: type=inline
