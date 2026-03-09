@@ -138,10 +138,10 @@ jobs:
           cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-builder-cache:arm64
           cache-to: type=inline
 
-  # Build Rust binaries for etcd/haproxy (AMD64 - alpine, native, fast ~2-3min)
-  build-rust-binaries-alpine-amd64:
+  # Build Rust binaries for etcd (AMD64 - alpine, native, fast ~2-3min)
+  build-rust-binaries-etcd-amd64:
     needs: changes
-    if: ${{ needs.changes.outputs.etcd == 'true' || needs.changes.outputs.haproxy == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ needs.changes.outputs.etcd == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -161,7 +161,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push rust-alpine-builder cache for amd64
+      - name: Build and push rust-builder cache for etcd amd64
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -169,14 +169,14 @@ jobs:
           target: rust-builder
           platforms: linux/amd64
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}/rust-alpine-cache:amd64
-          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-alpine-cache:amd64
+          tags: ${{ env.IMAGE_PREFIX }}/rust-etcd-cache:amd64
+          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-etcd-cache:amd64
           cache-to: type=inline
 
-  # Build Rust binaries for etcd/haproxy (ARM64 - alpine, QEMU, slow ~40min)
-  build-rust-binaries-alpine-arm64:
+  # Build Rust binaries for etcd (ARM64 - alpine, QEMU, slow ~40min)
+  build-rust-binaries-etcd-arm64:
     needs: changes
-    if: ${{ needs.changes.outputs.etcd == 'true' || needs.changes.outputs.haproxy == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ needs.changes.outputs.etcd == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -199,7 +199,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push rust-alpine-builder cache for arm64
+      - name: Build and push rust-builder cache for etcd arm64
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -207,8 +207,81 @@ jobs:
           target: rust-builder
           platforms: linux/arm64
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}/rust-alpine-cache:arm64
-          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-alpine-cache:arm64
+          tags: ${{ env.IMAGE_PREFIX }}/rust-etcd-cache:arm64
+          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-etcd-cache:arm64
+          cache-to: type=inline
+
+  # Build Rust binaries for haproxy (AMD64 - alpine, native, fast ~2-3min)
+  build-rust-binaries-haproxy-amd64:
+    needs: changes
+    if: ${{ needs.changes.outputs.haproxy == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push rust-builder cache for haproxy amd64
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./haproxy/Dockerfile
+          target: rust-builder
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}/rust-haproxy-cache:amd64
+          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-haproxy-cache:amd64
+          cache-to: type=inline
+
+  # Build Rust binaries for haproxy (ARM64 - alpine, QEMU, slow ~40min)
+  build-rust-binaries-haproxy-arm64:
+    needs: changes
+    if: ${{ needs.changes.outputs.haproxy == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push rust-builder cache for haproxy arm64
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./haproxy/Dockerfile
+          target: rust-builder
+          platforms: linux/arm64
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}/rust-haproxy-cache:arm64
+          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-haproxy-cache:arm64
           cache-to: type=inline
 
   # Build postgres-patroni for AMD64 (depends only on amd64 rust binaries)
@@ -336,9 +409,9 @@ jobs:
             type=registry,ref=${{ env.IMAGE_PREFIX }}/postgres-patroni:${{ matrix.postgres_major }}
           cache-to: type=inline
 
-  # Build etcd for AMD64 (depends only on amd64 alpine rust binaries)
+  # Build etcd for AMD64 (depends only on amd64 etcd rust binaries)
   build-etcd-amd64:
-    needs: [changes, build-rust-binaries-alpine-amd64]
+    needs: [changes, build-rust-binaries-etcd-amd64]
     if: ${{ needs.changes.outputs.etcd == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
@@ -381,13 +454,13 @@ jobs:
             ${{ env.IMAGE_PREFIX }}/etcd:${{ steps.meta.outputs.major }}${{ env.BETA_SUFFIX }}
             ${{ env.IMAGE_PREFIX }}/etcd:${{ env.ETCD_VERSION }}-${{ steps.meta.outputs.sha }}${{ env.BETA_SUFFIX }}
           cache-from: |
-            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-alpine-cache:amd64
+            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-etcd-cache:amd64
             type=registry,ref=${{ env.IMAGE_PREFIX }}/etcd:latest
           cache-to: type=inline
 
-  # Build etcd for ARM64 (depends only on arm64 alpine rust binaries)
+  # Build etcd for ARM64 (depends only on arm64 etcd rust binaries)
   build-etcd-arm64:
-    needs: [changes, build-rust-binaries-alpine-arm64]
+    needs: [changes, build-rust-binaries-etcd-arm64]
     if: ${{ needs.changes.outputs.etcd == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
@@ -433,13 +506,13 @@ jobs:
             ${{ env.IMAGE_PREFIX }}/etcd:${{ steps.meta.outputs.major }}${{ env.BETA_SUFFIX }}
             ${{ env.IMAGE_PREFIX }}/etcd:${{ env.ETCD_VERSION }}-${{ steps.meta.outputs.sha }}${{ env.BETA_SUFFIX }}
           cache-from: |
-            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-alpine-cache:arm64
+            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-etcd-cache:arm64
             type=registry,ref=${{ env.IMAGE_PREFIX }}/etcd:latest
           cache-to: type=inline
 
-  # Build haproxy for AMD64 (depends only on amd64 alpine rust binaries)
+  # Build haproxy for AMD64 (depends only on amd64 haproxy rust binaries)
   build-haproxy-amd64:
-    needs: [changes, build-rust-binaries-alpine-amd64]
+    needs: [changes, build-rust-binaries-haproxy-amd64]
     if: ${{ needs.changes.outputs.haproxy == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
@@ -480,13 +553,13 @@ jobs:
             ${{ env.IMAGE_PREFIX }}/haproxy:${{ steps.meta.outputs.major }}${{ env.BETA_SUFFIX }}
             ${{ env.IMAGE_PREFIX }}/haproxy:${{ env.HAPROXY_VERSION }}-${{ steps.meta.outputs.sha }}${{ env.BETA_SUFFIX }}
           cache-from: |
-            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-alpine-cache:amd64
+            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-haproxy-cache:amd64
             type=registry,ref=${{ env.IMAGE_PREFIX }}/haproxy:latest
           cache-to: type=inline
 
-  # Build haproxy for ARM64 (depends only on arm64 alpine rust binaries)
+  # Build haproxy for ARM64 (depends only on arm64 haproxy rust binaries)
   build-haproxy-arm64:
-    needs: [changes, build-rust-binaries-alpine-arm64]
+    needs: [changes, build-rust-binaries-haproxy-arm64]
     if: ${{ needs.changes.outputs.haproxy == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     permissions:
@@ -530,6 +603,6 @@ jobs:
             ${{ env.IMAGE_PREFIX }}/haproxy:${{ steps.meta.outputs.major }}${{ env.BETA_SUFFIX }}
             ${{ env.IMAGE_PREFIX }}/haproxy:${{ env.HAPROXY_VERSION }}-${{ steps.meta.outputs.sha }}${{ env.BETA_SUFFIX }}
           cache-from: |
-            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-alpine-cache:arm64
+            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-haproxy-cache:arm64
             type=registry,ref=${{ env.IMAGE_PREFIX }}/haproxy:latest
           cache-to: type=inline
