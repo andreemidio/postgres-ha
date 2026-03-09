@@ -67,11 +67,6 @@ postgresql:
   pgpass: /tmp/pgpass
   callbacks:
     on_role_change: /usr/local/bin/on-role-change
-  create_replica_methods:
-    - basebackup
-  basebackup:
-    checkpoint: "fast"
-    wal-method: "stream"
   authentication:
     replication:
       username: "{repl_user}"
