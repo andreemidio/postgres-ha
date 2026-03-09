@@ -181,7 +181,7 @@ jobs:
 
     strategy:
       matrix:
-        postgres_major: [13, 14, 15, 16, 17]
+        postgres_major: [14, 15, 16, 17]
 
     steps:
       - name: Checkout repository
