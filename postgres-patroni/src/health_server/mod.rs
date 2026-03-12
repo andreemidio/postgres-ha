@@ -24,7 +24,7 @@ pub async fn start(config: HealthServerConfig) -> Result<tokio::task::JoinHandle
     let patroni_port = config.patroni_port;
     let app = routes::create_router(config);
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    let addr = SocketAddr::from(([0, 0, 0, 0, 0, 0, 0, 0], port));
     let listener = TcpListener::bind(addr).await?;
 
     info!(
