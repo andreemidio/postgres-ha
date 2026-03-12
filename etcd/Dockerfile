@@ -20,13 +20,21 @@ COPY postgres-patroni ./postgres-patroni
 # Build statically linked release binary
 RUN cargo build --release -p etcd-entrypoint
 
+# Minimal stage with just binaries (used as cache target in CI)
+FROM scratch AS rust-builder-local-output
+COPY --from=rust-builder /build/target/release/etcd-entrypoint /etcd-entrypoint
+
+# Stage for CI: pull pre-built binaries (overridden via --build-context rust-binaries=...)
+FROM scratch AS rust-binaries
+COPY --from=rust-builder-local-output / /
+
 # ============================================================
 # Final stage: etcd with Rust entrypoint
 # ============================================================
 FROM quay.io/coreos/etcd:v${ETCD_VERSION}
 
 # Copy Rust binary (statically linked, no glibc needed)
-COPY --from=rust-builder --chmod=755 /build/target/release/etcd-entrypoint /entrypoint
+COPY --from=rust-binaries --chmod=755 /etcd-entrypoint /entrypoint
 
 ENV ETCD_DATA_DIR=/var/lib/etcd
 # Enable gRPC gateway for Patroni etcd3 client compatibility

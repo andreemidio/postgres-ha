@@ -88,16 +88,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push rust-builder cache for amd64
+      - name: Build and push rust binaries for amd64
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./postgres-patroni/Dockerfile
-          target: rust-builder
+          target: rust-builder-local-output
           platforms: linux/amd64
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}/rust-builder-cache:amd64
-          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-builder-cache:amd64
+          tags: ${{ env.IMAGE_PREFIX }}/postgres-rust-binaries:latest
+          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/postgres-rust-binaries:latest
           cache-to: type=inline
 
   # Build Rust binaries for etcd (AMD64 - alpine, native, fast ~2-3min)
@@ -123,16 +123,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push rust-builder cache for etcd amd64
+      - name: Build and push rust binaries for etcd amd64
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./etcd/Dockerfile
-          target: rust-builder
+          target: rust-builder-local-output
           platforms: linux/amd64
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}/rust-etcd-cache:amd64
-          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-etcd-cache:amd64
+          tags: ${{ env.IMAGE_PREFIX }}/etcd-rust-binaries:latest
+          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/etcd-rust-binaries:latest
           cache-to: type=inline
 
   # Build Rust binaries for haproxy (AMD64 - alpine, native, fast ~2-3min)
@@ -158,16 +158,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push rust-builder cache for haproxy amd64
+      - name: Build and push rust binaries for haproxy amd64
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./haproxy/Dockerfile
-          target: rust-builder
+          target: rust-builder-local-output
           platforms: linux/amd64
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}/rust-haproxy-cache:amd64
-          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-haproxy-cache:amd64
+          tags: ${{ env.IMAGE_PREFIX }}/haproxy-rust-binaries:latest
+          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/haproxy-rust-binaries:latest
           cache-to: type=inline
 
   # Build postgres-patroni for AMD64 (depends only on amd64 rust binaries)
@@ -220,15 +220,15 @@ jobs:
           push: true
           build-args: |
             POSTGRES_VERSION=${{ matrix.postgres_major }}
+          build-contexts: |
+            rust-binaries=docker-image://${{ env.IMAGE_PREFIX }}/postgres-rust-binaries:latest
           tags: |
             ${{ env.IMAGE_PREFIX }}/postgres-patroni:${{ matrix.postgres_major }}${{ env.BETA_SUFFIX }}
             ${{ env.IMAGE_PREFIX }}/postgres-patroni:${{ matrix.postgres_major }}-${{ steps.sha.outputs.short }}${{ env.BETA_SUFFIX }}
             ${{ env.IMAGE_PREFIX }}/postgres-patroni:${{ steps.pg_version.outputs.minor_version }}${{ env.BETA_SUFFIX }}
             ${{ env.IMAGE_PREFIX }}/postgres-patroni:${{ steps.pg_version.outputs.minor_version }}-${{ steps.sha.outputs.short }}${{ env.BETA_SUFFIX }}
             ${{ matrix.postgres_major == env.LATEST_POSTGRES_MAJOR && format('{0}/postgres-patroni:latest{1}', env.IMAGE_PREFIX, env.BETA_SUFFIX) || '' }}
-          cache-from: |
-            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-builder-cache:amd64
-            type=registry,ref=${{ env.IMAGE_PREFIX }}/postgres-patroni:${{ matrix.postgres_major }}
+          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/postgres-patroni:${{ matrix.postgres_major }}
           cache-to: type=inline
 
   # Build etcd for AMD64 (depends only on amd64 etcd rust binaries)
@@ -267,6 +267,8 @@ jobs:
           context: .
           file: ./etcd/Dockerfile
           build-args: ETCD_VERSION=${{ env.ETCD_VERSION }}
+          build-contexts: |
+            rust-binaries=docker-image://${{ env.IMAGE_PREFIX }}/etcd-rust-binaries:latest
           platforms: linux/amd64
           push: true
           tags: |
@@ -275,9 +277,7 @@ jobs:
             ${{ env.IMAGE_PREFIX }}/etcd:${{ steps.meta.outputs.minor }}${{ env.BETA_SUFFIX }}
             ${{ env.IMAGE_PREFIX }}/etcd:${{ steps.meta.outputs.major }}${{ env.BETA_SUFFIX }}
             ${{ env.IMAGE_PREFIX }}/etcd:${{ env.ETCD_VERSION }}-${{ steps.meta.outputs.sha }}${{ env.BETA_SUFFIX }}
-          cache-from: |
-            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-etcd-cache:amd64
-            type=registry,ref=${{ env.IMAGE_PREFIX }}/etcd:latest
+          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/etcd:latest
           cache-to: type=inline
 
   # Build haproxy for AMD64 (depends only on amd64 haproxy rust binaries)
@@ -315,6 +315,8 @@ jobs:
           context: .
           file: ./haproxy/Dockerfile
           build-args: HAPROXY_VERSION=${{ env.HAPROXY_VERSION }}
+          build-contexts: |
+            rust-binaries=docker-image://${{ env.IMAGE_PREFIX }}/haproxy-rust-binaries:latest
           platforms: linux/amd64
           push: true
           tags: |
@@ -322,7 +324,5 @@ jobs:
             ${{ env.IMAGE_PREFIX }}/haproxy:${{ env.HAPROXY_VERSION }}${{ env.BETA_SUFFIX }}
             ${{ env.IMAGE_PREFIX }}/haproxy:${{ steps.meta.outputs.major }}${{ env.BETA_SUFFIX }}
             ${{ env.IMAGE_PREFIX }}/haproxy:${{ env.HAPROXY_VERSION }}-${{ steps.meta.outputs.sha }}${{ env.BETA_SUFFIX }}
-          cache-from: |
-            type=registry,ref=${{ env.IMAGE_PREFIX }}/rust-haproxy-cache:amd64
-            type=registry,ref=${{ env.IMAGE_PREFIX }}/haproxy:latest
+          cache-from: type=registry,ref=${{ env.IMAGE_PREFIX }}/haproxy:latest
           cache-to: type=inline

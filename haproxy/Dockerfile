@@ -20,6 +20,14 @@ COPY postgres-patroni ./postgres-patroni
 # Build release binary (statically linked with musl)
 RUN cargo build --release -p haproxy-entrypoint
 
+# Minimal stage with just binaries (used as cache target in CI)
+FROM scratch AS rust-builder-local-output
+COPY --from=rust-builder /build/target/release/haproxy-entrypoint /haproxy-entrypoint
+
+# Stage for CI: pull pre-built binaries (overridden via --build-context rust-binaries=...)
+FROM scratch AS rust-binaries
+COPY --from=rust-builder-local-output / /
+
 # ============================================================
 # Final stage: HAProxy with Rust entrypoint
 # ============================================================
@@ -32,7 +40,7 @@ USER root
 RUN apk add --no-cache postgresql-client bash
 
 # Copy Rust binary
-COPY --from=rust-builder --chmod=755 /build/target/release/haproxy-entrypoint /entrypoint
+COPY --from=rust-binaries --chmod=755 /haproxy-entrypoint /entrypoint
 
 RUN chown -R haproxy:haproxy /usr/local/etc/haproxy
 

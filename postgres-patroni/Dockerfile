@@ -2,11 +2,16 @@
 #
 # Usage:
 #   docker build --build-arg POSTGRES_VERSION=17 -t postgres:17-ha .
+#
+# For CI with pre-built binaries (skips Rust compilation):
+#   docker build --build-arg POSTGRES_VERSION=17 \
+#     --build-context rust-binaries=docker-image://ghcr.io/org/postgres-rust-binaries:latest \
+#     -t postgres:17-ha .
 
 ARG POSTGRES_VERSION=17
 
 # ============================================================
-# Rust builder stage: Compile all Rust binaries
+# Rust builder stage: Compile all Rust binaries (local builds)
 # ============================================================
 FROM rust:1.83-bookworm AS rust-builder
 
@@ -28,6 +33,10 @@ COPY --from=rust-builder /build/target/release/postgres-wrapper /postgres-wrappe
 COPY --from=rust-builder /build/target/release/post-bootstrap /post-bootstrap
 COPY --from=rust-builder /build/target/release/patroni-runner /patroni-runner
 COPY --from=rust-builder /build/target/release/on-role-change /on-role-change
+
+# Stage for CI: pull pre-built binaries (overridden via --build-context rust-binaries=...)
+FROM scratch AS rust-binaries
+COPY --from=rust-builder-local-output / /
 
 # ============================================================
 # Final stage: PostgreSQL with Patroni HA
@@ -59,10 +68,10 @@ RUN mkdir -p /home/postgres /var/run/postgresql /etc/patroni \
 
 # Copy SSL init script and Rust binaries
 COPY --chmod=755 postgres-patroni/init-ssl.sh /docker-entrypoint-initdb.d/init-ssl.sh
-COPY --from=rust-builder-local-output --chmod=755 /postgres-wrapper /usr/local/bin/postgres-wrapper
-COPY --from=rust-builder-local-output --chmod=755 /post-bootstrap /usr/local/bin/post-bootstrap
-COPY --from=rust-builder-local-output --chmod=755 /patroni-runner /usr/local/bin/patroni-runner
-COPY --from=rust-builder-local-output --chmod=755 /on-role-change /usr/local/bin/on-role-change
+COPY --from=rust-binaries --chmod=755 /postgres-wrapper /usr/local/bin/postgres-wrapper
+COPY --from=rust-binaries --chmod=755 /post-bootstrap /usr/local/bin/post-bootstrap
+COPY --from=rust-binaries --chmod=755 /patroni-runner /usr/local/bin/patroni-runner
+COPY --from=rust-binaries --chmod=755 /on-role-change /usr/local/bin/on-role-change
 
 EXPOSE 5432 8008
 
