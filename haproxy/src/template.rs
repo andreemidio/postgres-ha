@@ -11,7 +11,7 @@ fn generate_server_entries(nodes: &[PostgresNode], single_node_mode: bool, healt
             if single_node_mode {
                 // Single node: basic TCP check
                 format!(
-                    "    server {} {}:{} check resolvers railway resolve-prefer ipv6",
+                    "    server {} {}:{} check resolvers railway",
                     node.name, node.host, node.pg_port
                 )
             } else {
@@ -21,7 +21,7 @@ fn generate_server_entries(nodes: &[PostgresNode], single_node_mode: bool, healt
                     None => node.health_port.clone(),
                 };
                 format!(
-                    "    server {} {}:{} check port {} resolvers railway resolve-prefer ipv6",
+                    "    server {} {}:{} check port {} resolvers railway",
                     node.name, node.host, node.pg_port, health_port
                 )
             }
