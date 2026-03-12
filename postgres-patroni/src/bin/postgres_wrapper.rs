@@ -226,6 +226,19 @@ async fn main() -> Result<()> {
             warn!(error = %e, "Failed to configure pg_stat_statements");
         }
 
+        // If this was a replica (standby), promote it to primary for standalone mode.
+        // This handles the case where a user downgrades from HA to standalone -
+        // the standby.signal file tells PostgreSQL to start as a replica, but
+        // without Patroni there's no primary to replicate from.
+        let standby_signal = format!("{}/standby.signal", pgdata);
+        if Path::new(&standby_signal).exists() {
+            info!("Removing standby.signal to promote replica to standalone primary...");
+            if let Err(e) = std::fs::remove_file(&standby_signal) {
+                error!(error = %e, "Failed to remove standby.signal");
+                std::process::exit(1);
+            }
+        }
+
         env::remove_var("PGHOST");
         env::remove_var("PGPORT");
 
