@@ -45,12 +45,14 @@ FROM postgres:${POSTGRES_VERSION} AS ha
 
 ARG PATRONI_VERSION=4.1.0
 
+ARG POSTGRES_VERSION
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl \
     sudo \
     python3 \
     python3-pip \
     curl \
+    postgresql-${POSTGRES_VERSION}-pgvector \
     && rm -rf /var/lib/apt/lists/*
 
 # Allow postgres user to execute specific commands as root
