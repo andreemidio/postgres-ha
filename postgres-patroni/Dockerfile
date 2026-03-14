@@ -8,7 +8,7 @@
 #     --build-context rust-binaries=docker-image://ghcr.io/org/postgres-rust-binaries:latest \
 #     -t postgres:17-ha .
 
-ARG POSTGRES_VERSION=17
+ARG POSTGRES_VERSION=18
 
 # ============================================================
 # Rust builder stage: Compile all Rust binaries (local builds)

@@ -11,7 +11,7 @@ This template deploys a production-ready, highly-available PostgreSQL cluster on
 - **Transparent routing** - single endpoint for all database connections
 - **Automatic recovery** - failed nodes rejoin as replicas
 - **Health monitoring** - Patroni REST API for cluster status
-- **Multi-version support** - PostgreSQL 14, 15, 16, and 17
+- **Multi-version support** - PostgreSQL 14, 15, 16, 17, and 18
 
 ## Architecture
 
@@ -310,7 +310,7 @@ pg_dump -h haproxy.railway.internal -U railway railway > backup.sql
 
 ## Upgrading PostgreSQL
 
-This template supports PostgreSQL 14, 15, 16, and 17. To upgrade:
+This template supports PostgreSQL 14, 15, 16, 17, and 18. To upgrade:
 
 1. Create a logical backup:
    ```bash
@@ -366,6 +366,7 @@ Pre-built images are published to GitHub Container Registry:
 
 ```bash
 # PostgreSQL + Patroni (multiple versions)
+ghcr.io/railwayapp/postgres-ha/postgres-patroni:18
 ghcr.io/railwayapp/postgres-ha/postgres-patroni:17
 ghcr.io/railwayapp/postgres-ha/postgres-patroni:16
 ghcr.io/railwayapp/postgres-ha/postgres-patroni:15
