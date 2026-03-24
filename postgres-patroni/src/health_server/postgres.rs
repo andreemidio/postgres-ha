@@ -13,8 +13,8 @@ use tracing::debug;
 /// - Err if unable to connect or query
 pub async fn is_in_recovery(config: &HealthServerConfig) -> Result<bool> {
     let connection_string = format!(
-        "host={} port={} user={} password={} dbname={} connect_timeout=5",
-        config.pg_host, config.pg_port, config.pg_user, config.pg_password, config.pg_database
+        "host=localhost port={} user={} password={} dbname={} connect_timeout=5",
+        config.pg_port, config.pg_user, config.pg_password, config.pg_database
     );
 
     let (client, connection) = tokio_postgres::connect(&connection_string, NoTls)
