@@ -25,7 +25,7 @@ bootstrap:
     ttl: {ttl}
     loop_wait: {loop_wait}
     retry_timeout: {retry_timeout}
-    maximum_lag_on_failover: 1048576
+    maximum_lag_on_failover: 104857600
     failsafe_mode: true
     synchronous_mode: {synchronous_mode}
     postgresql:
@@ -40,7 +40,9 @@ bootstrap:
         max_replication_slots: 10
         max_connections: 200
         password_encryption: scram-sha-256
-        shared_preload_libraries: pg_stat_statements
+        shared_preload_libraries: "timescaledb,pg_stat_statements"
+        timescaledb.max_background_workers: 16
+        max_worker_processes: 32
 
   initdb:
     - encoding: UTF8
@@ -64,7 +66,7 @@ postgresql:
   listen: "*:5432"
   connect_address: {connect_address}:5432
   data_dir: {data_dir}
-  pgpass: /tmp/pgpass
+  pgpass: /var/lib/postgresql/.pgpass
   callbacks:
     on_role_change: /usr/local/bin/on-role-change
   authentication:

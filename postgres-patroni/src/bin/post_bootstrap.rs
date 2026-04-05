@@ -6,12 +6,22 @@
 
 use anyhow::{Context, Result};
 use common::{init_logging, Telemetry, TelemetryEvent};
-use postgres_patroni::bootstrap::{read_credentials, run_psql, run_psql_in_db, run_psql_script, PATRONI_CONFIG};
+use postgres_patroni::bootstrap::{read_credentials, run_extensions, run_hypertables, run_psql, run_psql_script, run_schemas, PATRONI_CONFIG};
 use postgres_patroni::volume_root;
 use std::env;
 use std::path::Path;
 use std::time::Instant;
-use tracing::{error, info, warn};
+use tracing::{error, info};
+
+/// Quote a string as a SQL identifier (e.g. table/db name). Doubles any embedded double-quotes.
+fn pg_quote_ident(s: &str) -> String {
+    format!("\"{}\"", s.replace('"', "\"\""))
+}
+
+/// Quote a string as a SQL literal. Doubles any embedded single-quotes.
+fn pg_quote_literal(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "''"))
+}
 
 fn main() -> Result<()> {
     let _guard = init_logging("post-bootstrap");
@@ -135,11 +145,12 @@ $$;
     if !creds.app_db.is_empty() && creds.app_db != "postgres" {
         info!(database = %creds.app_db, "Checking app database");
 
+        // Use parameterized identifier via format %I to avoid injection
         let db_exists = run_psql(
             &creds.superuser,
             &format!(
-                "SELECT 1 FROM pg_database WHERE datname = '{}'",
-                creds.app_db
+                "SELECT 1 FROM pg_database WHERE datname = {}",
+                pg_quote_literal(&creds.app_db)
             ),
         )?;
 
@@ -147,7 +158,7 @@ $$;
             info!(database = %creds.app_db, "Creating app database");
             run_psql(
                 &creds.superuser,
-                &format!("CREATE DATABASE \"{}\"", creds.app_db),
+                &format!("CREATE DATABASE {}", pg_quote_ident(&creds.app_db)),
             )?;
         }
 
@@ -167,22 +178,34 @@ $$;
         }
     }
 
-    // Enable pg_stat_statements extension in postgres database and app database
-    if let Err(e) = run_psql(
-        &creds.superuser,
-        "CREATE EXTENSION IF NOT EXISTS pg_stat_statements",
-    ) {
-        warn!(error = %e, "Failed to create pg_stat_statements in postgres database");
+    if let Err(e) = run_extensions(&creds) {
+        error!(error = %e, "Failed to create extensions");
+        telemetry.send(TelemetryEvent::BootstrapFailed {
+            node: node_name.clone(),
+            error: e.to_string(),
+            phase: "create_extensions".to_string(),
+        });
+        std::process::exit(1);
     }
 
-    if !creds.app_db.is_empty() && creds.app_db != "postgres" {
-        if let Err(e) = run_psql_in_db(
-            &creds.superuser,
-            &creds.app_db,
-            "CREATE EXTENSION IF NOT EXISTS pg_stat_statements",
-        ) {
-            warn!(error = %e, database = %creds.app_db, "Failed to create pg_stat_statements in app database");
-        }
+    if let Err(e) = run_schemas(&creds) {
+        error!(error = %e, "Failed to create schemas");
+        telemetry.send(TelemetryEvent::BootstrapFailed {
+            node: node_name.clone(),
+            error: e.to_string(),
+            phase: "create_schemas".to_string(),
+        });
+        std::process::exit(1);
+    }
+
+    if let Err(e) = run_hypertables(&creds) {
+        error!(error = %e, "Failed to create hypertables");
+        telemetry.send(TelemetryEvent::BootstrapFailed {
+            node: node_name.clone(),
+            error: e.to_string(),
+            phase: "create_hypertables".to_string(),
+        });
+        std::process::exit(1);
     }
 
     let mut users_created = vec![creds.superuser.clone(), creds.repl_user.clone()];

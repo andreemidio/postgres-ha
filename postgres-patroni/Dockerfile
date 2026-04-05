@@ -44,8 +44,17 @@ COPY --from=rust-builder-local-output / /
 FROM postgres:${POSTGRES_VERSION} AS ha
 
 ARG PATRONI_VERSION=4.1.0
+ARG TIMESCALEDB_VERSION=2
 
 ARG POSTGRES_VERSION
+# Add TimescaleDB packagecloud repository
+RUN apt-get update && apt-get install -y --no-install-recommends gnupg curl ca-certificates \
+    && curl -fsSL https://packagecloud.io/timescale/timescaledb/gpgkey \
+       | gpg --dearmor -o /usr/share/keyrings/timescaledb.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/timescaledb.gpg] https://packagecloud.io/timescale/timescaledb/debian/ bookworm main" \
+       > /etc/apt/sources.list.d/timescaledb.list \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl \
     sudo \
@@ -53,6 +62,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     curl \
     postgresql-${POSTGRES_VERSION}-pgvector \
+    timescaledb-${TIMESCALEDB_VERSION}-postgresql-${POSTGRES_VERSION} \
+    postgresql-${POSTGRES_VERSION}-postgis-3 \
+    postgresql-${POSTGRES_VERSION}-postgis-3-scripts \
+    timescaledb-toolkit-postgresql-${POSTGRES_VERSION} \
     && rm -rf /var/lib/apt/lists/*
 
 # Allow postgres user to execute specific commands as root
